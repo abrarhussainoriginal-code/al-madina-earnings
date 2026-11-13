@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Al-Madina Earnings — Earn by Completing Tasks</title>
+  <!--
+    Al-Madina Earnings — SAFE VERSION ONLY
+    --------------------------------------
+    * Free to join. No one pays to join.
+    * No deposit system. No paid plans.
+    * No guaranteed daily percent (no 20%, no 15%).
+    * Users earn ONLY per completed task, AFTER an admin approves it.
+    * Referral: 5% of what referred friends earn from tasks.
+    * Withdrawal: no minimum. Admin pays manually.
+
+    This is a single-page app. The top menu switches between
+    "views" (Home, Tasks, Wallet, etc.). app.js shows one view
+    at a time and hides the others.
+  -->
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Supabase library. It only does something if you fill in
+       SUPABASE_URL and SUPABASE_ANON_KEY in app.js CONFIG.
+       If those are empty, the site uses local demo mode. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="header">
+    <div class="container header-inner">
+      <div class="logo">
+        <span class="logo-mark">🕌</span>
+        <div>
+          <strong>Al-Madina Earnings</strong>
+          <small>Free to join • Earn per task • Paid by admin</small>
+        </div>
+      </div>
+      <nav class="nav" id="mainNav">
+        <button data-view="home" class="nav-btn active">Home</button>
+        <button data-view="tasks" class="nav-btn">Tasks</button>
+        <button data-view="wallet" class="nav-btn">Wallet</button>
+        <button data-view="referrals" class="nav-btn">Referrals</button>
+        <button data-view="withdraw" class="nav-btn">Withdraw</button>
+        <button data-view="admin" class="nav-btn" id="adminNavBtn" style="display:none;">Admin</button>
+      </nav>
+      <div class="auth-area">
+        <span id="helloUser" class="hello"></span>
+        <button id="loginBtn" class="btn btn-outline">Login</button>
+        <button id="signupBtn" class="btn btn-primary">Create account</button>
+        <button id="logoutBtn" class="btn btn-outline" style="display:none;">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ===== HOME VIEW ===== -->
+    <section id="view-home" class="view">
+      <div class="hero">
+        <h1>Earn by helping channels grow</h1>
+        <p>
+          Join free. Complete follow, like and comment tasks on
+          TikTok, YouTube, Instagram and Facebook.
+          An admin checks your work first — <strong>you only get paid
+          after approval</strong>. No deposit, no promised daily percent.
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-large" onclick="showView('signup')">Create free account</button>
+          <button class="btn btn-outline btn-large" onclick="showView('tasks')">See today’s tasks</button>
+        </div>
+        <p class="hero-note">Demo mode: accounts are saved in this browser only until Supabase is set up. See README.md.</p>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <h3>1. Join free</h3>
+          <p>Create an account. No payment, no screenshot, no plan to buy.</p>
+        </div>
+        <div class="card">
+          <h3>2. Do 3 tasks a day</h3>
+          <p>30 days of tasks. Follow, like or comment on the channels below. Open the channel, do the action, then press “Mark done”.</p>
+        </div>
+        <div class="card">
+          <h3>3. Admin approves, then you earn</h3>
+          <p>Follow Rs 10 • Like Rs 5 • Comment Rs 10. These are example rates — the admin can change them in Settings.</p>
+        </div>
+        <div class="card">
+          <h3>4. Invite friends, earn 5%</h3>
+          <p>Share your referral code. You earn 5% of what your friends earn from tasks — not from any deposit, because there is none.</p>
+        </div>
+        <div class="card">
+          <h3>5. Withdraw — no minimum</h3>
+          <p>Give your phone number and bank account. The admin sends the money manually and marks it paid.</p>
+        </div>
+        <div class="card">
+          <h3>Our channels</h3>
+          <ul class="channel-list">
+            <li>🎵 TikTok — <a href="https://www.tiktok.com/@not_your_ibrar" target="_blank" rel="noopener">@not_your_ibrar</a></li>
+            <li>🎵 TikTok — <a href="https://www.tiktok.com/@you_know_zakir" target="_blank" rel="noopener">@you_know_zakir</a></li>
+            <li>▶️ YouTube — <a href="https://youtube.com/@oyeah-b8m" target="_blank" rel="noopener">@oyeah-b8m</a></li>
+            <li>📸 Instagram — <a href="https://www.instagram.com/zakir_romi" target="_blank" rel="noopener">@zakir_romi</a></li>
+            <li>👍 Facebook — <a href="https://www.facebook.com/share/1EzUtZgzFa/" target="_blank" rel="noopener">Facebook channel</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SIGN UP VIEW ===== -->
+    <section id="view-signup" class="view" style="display:none;">
+      <div class="form-card">
+        <h2>Create account — free</h2>
+        <p class="muted">No payment is asked for at any step.</p>
+        <label>Full name <input id="signupName" type="text" placeholder="Your name" /></label>
+        <label>Email <input id="signupEmail" type="email" placeholder="you@example.com" /></label>
+        <label>Password <input id="signupPassword" type="password" placeholder="Choose a password" /></label>
+        <label>Referral code (optional) <input id="signupReferral" type="text" placeholder="e.g. AME-AB12" /></label>
+        <button class="btn btn-primary btn-block" onclick="handleSignup()">Create account</button>
+        <p class="muted">Already have an account? <a href="#" onclick="showView('login'); return false;">Login</a></p>
+        <p id="signupMsg" class="msg"></p>
+      </div>
+    </section>
+
+    <!-- ===== LOGIN VIEW ===== -->
+    <section id="view-login" class="view" style="display:none;">
+      <div class="form-card">
+        <h2>Login</h2>
+        <label>Email <input id="loginEmail" type="email" placeholder="you@example.com" /></label>
+        <label>Password <input id="loginPassword" type="password" placeholder="Your password" /></label>
+        <button class="btn btn-primary btn-block" onclick="handleLogin()">Login</button>
+        <p class="muted">No account yet? <a href="#" onclick="showView('signup'); return false;">Create one free</a></p>
+        <p id="loginMsg" class="msg"></p>
+      </div>
+    </section>
+
+    <!-- ===== DASHBOARD / TASKS VIEW ===== -->
+    <section id="view-tasks" class="view" style="display:none;">
+      <h2>Your tasks</h2>
+      <p class="muted">You must be logged in to mark a task done. Pick a day, open the channel, do the action, then press “Mark done”. An admin must approve it before you are paid.</p>
+
+      <div class="stats">
+        <div class="stat"><span>Balance</span><strong id="statBalance">Rs 0</strong></div>
+        <div class="stat"><span>Task earnings</span><strong id="statTaskEarnings">Rs 0</strong></div>
+        <div class="stat"><span>Referral earnings</span><strong id="statRefEarnings">Rs 0</strong></div>
+        <div class="stat"><span>Tasks approved</span><strong id="statApproved">0</strong></div>
+      </div>
+
+      <label>Day
+        <select id="daySelect" onchange="renderTasks()"></select>
+      </label>
+
+      <div id="taskList" class="task-list"></div>
+      <p id="tasksMsg" class="msg"></p>
+    </section>
+
+    <!-- ===== WALLET VIEW ===== -->
+    <section id="view-wallet" class="view" style="display:none;">
+      <h2>Wallet</h2>
+      <div class="stats">
+        <div class="stat"><span>Balance</span><strong id="walletBalance">Rs 0</strong></div>
+        <div class="stat"><span>Total earned</span><strong id="walletTotal">Rs 0</strong></div>
+        <div class="stat"><span>Total withdrawn</span><strong id="walletWithdrawn">Rs 0</strong></div>
+      </div>
+      <h3>History</h3>
+      <ul id="walletHistory" class="history"></ul>
+    </section>
+
+    <!-- ===== REFERRALS VIEW ===== -->
+    <section id="view-referrals" class="view" style="display:none;">
+      <h2>Referrals — earn 5%</h2>
+      <p>You earn <strong>5% of what your referred friends earn from tasks</strong>. You do not earn from any deposit, because users never deposit.</p>
+      <div class="form-card">
+        <label>Your referral code</label>
+        <div class="copy-row">
+          <input id="myReferralCode" readonly />
+          <button class="btn btn-outline" onclick="copyReferral()">Copy</button>
+        </div>
+        <p class="muted">Share this code. When a friend signs up with it, they are linked to you.</p>
+        <p><strong>Friends referred:</strong> <span id="refCount">0</span> &nbsp;•&nbsp; <strong>Referral earnings:</strong> <span id="refEarnings">Rs 0</span></p>
+      </div>
+      <h3>Your referred friends</h3>
+      <ul id="refList" class="history"></ul>
+    </section>
+
+    <!-- ===== WITHDRAW VIEW ===== -->
+    <section id="view-withdraw" class="view" style="display:none;">
+      <h2>Withdraw — no minimum</h2>
+      <p class="muted">Any amount above Rs 0 can be withdrawn. The admin sends the money manually and marks it paid.</p>
+      <div class="form-card">
+        <p><strong>Available balance:</strong> <span id="withdrawBalance">Rs 0</span></p>
+        <label>Amount (Rs) <input id="withdrawAmount" type="number" min="1" placeholder="e.g. 50" /></label>
+        <label>Phone number <input id="withdrawPhone" type="tel" placeholder="03xx-xxxxxxx" /></label>
+        <label>Bank account (for payment) <input id="withdrawBank" type="text" placeholder="Bank name + account number" /></label>
+        <button class="btn btn-primary btn-block" onclick="handleWithdraw()">Request withdrawal</button>
+        <p id="withdrawMsg" class="msg"></p>
+      </div>
+      <h3>Your withdrawal requests</h3>
+      <ul id="withdrawList" class="history"></ul>
+    </section>
+
+    <!-- ===== ADMIN VIEW ===== -->
+    <section id="view-admin" class="view" style="display:none;">
+      <h2>Admin panel</h2>
+      <p class="muted">Only admins can see this. The first user to sign up can claim admin, then promote friends from here.</p>
+      <div id="claimAdminBox" class="form-card" style="display:none;">
+        <p>No admin exists yet. If you are the owner, claim admin access:</p>
+        <button class="btn btn-primary" onclick="claimAdmin()">Claim admin access</button>
+      </div>
+
+      <div id="adminContent" style="display:none;">
+        <h3>Reward settings</h3>
+        <div class="form-card">
+          <label>Follow reward (Rs) <input id="setFollow" type="number" /></label>
+          <label>Like reward (Rs) <input id="setLike" type="number" /></label>
+          <label>Comment reward (Rs) <input id="setComment" type="number" /></label>
+          <label>Referral percent (%) <input id="setReferral" type="number" /></label>
+          <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+          <p id="settingsMsg" class="msg"></p>
+        </div>
+
+        <h3>Pending task submissions</h3>
+        <ul id="adminTasks" class="history"></ul>
+
+        <h3>Pending withdrawals</h3>
+        <ul id="adminWithdrawals" class="history"></ul>
+
+        <h3>All users</h3>
+        <ul id="adminUsers" class="history"></ul>
+      </div>
+      <p id="adminMsg" class="msg"></p>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Al-Madina Earnings — free to join. Earn only per approved task. No deposit, no guaranteed daily return.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

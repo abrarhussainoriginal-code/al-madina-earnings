@@ -1,0 +1,25 @@
+# ============================================================
+# Al-Madina Earnings — netlify.toml
+# Netlify settings for this folder.
+# This is a STATIC site: no build step, no server.
+# Publish directory is "." — the folder itself, where index.html lives.
+# ============================================================
+
+[build]
+  publish = "."
+  command = ""
+
+# Single-page-app fallback: any unknown path shows index.html,
+# so the in-page views (Tasks, Wallet, Admin) still work
+# if someone refreshes the page.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Small security headers. These do not store or send any data.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
