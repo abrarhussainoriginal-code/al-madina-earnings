@@ -1,7 +1,10 @@
 # Al-Madina Earnings — Netlify-ready codebase (safe version)
 
-Free to join. Earn only per completed task, after admin approval.
-No deposit system. No paid plans. No guaranteed daily percent.
+Account creation is free. Ten 80-day activity plans are available;
+a selected plan activates automatically when the fictional balance covers
+its price, which is deducted at activation. This demo does not
+collect or verify payments. All plan rewards and balances are fictional
+classroom-simulation values; no real money is paid.
 
 > **Read this first:** this folder is the *code* for the site, so you
 > can read it and understand it before anything is uploaded or
@@ -11,10 +14,10 @@ No deposit system. No paid plans. No guaranteed daily percent.
 
 | File | What it is | Open it first? |
 |---|---|---|
-| `index.html` | The whole site: Home, Sign up, Login, Dashboard / Tasks, Wallet, Referrals, Withdraw, Admin. | **Yes — start here.** It is the page you see. |
+| `index.html` | The whole site: Home, Sign up, Login, Dashboard / Tasks, Wallet, Deposit, Referrals, Withdraw, Admin. | **Yes — start here.** It is the page you see. |
 | `styles.css` | The look: green / white theme, cards, buttons, mobile layout. | If you want to change colours or sizes. |
 | `app.js` | All the logic in plain JavaScript, with comments. | **Second.** This is where the rules live. |
-| `supabase.sql` | The database: tables + the 30-day task plan + settings. Run once in Supabase. | When you set up Supabase. |
+| `supabase.sql` | The database: tables + the 80-day task plan + settings. Run in Supabase. | When you set up Supabase. |
 | `netlify.toml` | Netlify settings: publish this folder, no build step. | You do not need to edit it. |
 | `README.md` | This guide. | You are reading it. |
 
@@ -23,14 +26,25 @@ No deposit system. No paid plans. No guaranteed daily percent.
 ### 1. `index.html` — what you see
 
 One page with sections called "views". Only one view is shown at a time.
-The top menu switches views: Home, Tasks, Wallet, Referrals, Withdraw, Admin.
+The top menu switches views: Home, Tasks, Plans, Wallet, Referrals, Withdraw, Admin.
 
 - **Home** explains the deal and lists the 5 channels.
 - **Sign up** asks for name, email, password, and an optional referral code.
 - **Login** asks for email + password.
-- **Tasks** shows Day 1–30 (pick a day), 3 tasks a day, each with
-  Open channel + Mark done.
+- **Plans** offers these 80-day classroom-simulation tiers:
+  Rs 390 (Rs 60/day), Rs 870 (Rs 145/day), Rs 1,890 (Rs 315/day),
+  Rs 3,660 (Rs 610/day), Rs 7,260 (Rs 1,210/day), Rs 14,850 (Rs 2,475/day),
+  Rs 32,820 (Rs 5,470/day), Rs 62,940 (Rs 10,490/day),
+  Rs 136,560 (Rs 22,760/day), and Rs 280,830 (Rs 46,805/day).
+  A daily simulation reward is credited once after all three tasks for that
+  day are approved. Plans activate automatically when the fictional balance
+  covers their price; the price is deducted. The demo does not handle payments.
+- **Tasks** stays locked without an active plan. Once activated, it
+  shows Day 1–80, 3 tasks a day, each with Open channel + Mark done.
 - **Wallet** shows balance, total earned, total withdrawn, and history.
+- **Deposit** submits a fictional balance request for admin accept/reject review.
+  Accepting adds simulated balance only; no real payment is processed. These
+  requests are stored in the current browser and are not shared across devices.
 - **Referrals** shows your code, how many friends joined, and earnings.
 - **Withdraw** asks for amount, phone number, and bank account.
 - **Admin** is hidden unless you are an admin.
@@ -55,34 +69,40 @@ REFERRAL_PERCENT: 5,
 ```
 - Leave the Supabase fields empty for local demo mode.
 - Fill them in only after you create a Supabase project (below).
-- Rewards are **examples**. Change them in Admin to match what the
-  company actually pays you.
+- These per-action rates apply only to legacy plans. New plans use the
+  fictional daily rewards listed in `PLANS`; all three tasks must be approved.
 
 **Channels + task plan**
-- `CHANNELS` is the exact 5 channels you gave:
-  TikTok `@not_your_ibrar`, TikTok `@you_know_zakir`,
-  YouTube `@oyeah-b8m`, Instagram `@zakir_romi`, Facebook share link.
-- `generateTasks()` makes 30 days × 3 tasks = 90 tasks, rotating
+- `CHANNELS` contains the current five channels:
+  TikTok `@totabhai326`, TikTok `@abdulrehman65357`,
+  YouTube `@oyeah-b8m`, Instagram `@mr_abdulrehman_150`,
+  and the Facebook share link.
+- `generateTasks()` makes 80 days × 3 tasks = 240 tasks, rotating
   channels so no day repeats the same channel 3 times.
+- Day 1 opens when a plan is activated; each following task day unlocks
+  24 hours later. Existing active plans use their expiry to infer the start.
+- New plan rewards are fictional classroom-simulation amounts and are credited
+  once per day only after all three tasks for that day are approved. No real
+  money is paid by this project.
 
 **The key conditions — where the safety rules live:**
 
-1. **Task approval before pay** — in `submitTask()` and `approveTask()`
+1. **Task approval before simulated reward** — in `submitTask()` and `approveTask()`
    - `submitTask()` only creates a row with `status: "pending"`.
      It pays **nothing**.
-   - `approveTask()` is the **only** place task money is created.
-     It adds the reward to the user's balance + task earnings.
+   - `approveTask()` is the **only** place a simulated reward is credited.
+     New-plan rewards are credited once per day, after all three approvals.
    - `rejectTask()` pays nothing.
 
 2. **One submission per task** — in `submitTask()`
    - If a row already exists for that user + that task, the second
      press is blocked. You cannot be paid twice for one task.
 
-3. **Referral 5%** — in `approveTask()`, right after paying the earner
+3. **Referral 5%** — in `approveTask()`, after crediting the earner
    - If the earner was referred by someone, the referrer gets
-     `reward × 5 / 100`. Example: 5% of Rs 10 = Rs 0.50.
-   - It is paid from **task earnings only**, never from a deposit,
-     because there is no deposit.
+     `credited reward × 5 / 100`.
+   - It is based on simulated task rewards only; demo balance requests do not
+     create referral bonuses.
 
 4. **Withdrawal, no minimum** — in `handleWithdraw()`
    - Any amount above Rs 0 is allowed, as long as `amount <= balance`.
@@ -100,37 +120,53 @@ REFERRAL_PERCENT: 5,
      reject + refund, and change reward rates + referral percent
      in Settings.
 
-6. **Supabase vs local demo** — in `initSupabase()` and `store`
-   - If `SUPABASE_URL` + `SUPABASE_ANON_KEY` are filled in, the app
-     uses Supabase Auth and writes submissions / withdrawals to
-     Supabase tables too.
+6. **Plans and task access** — in `requestPlan()`, `activateRequestedPlan()`,
+   `getActivePlan()`, and `submitTask()`
+  - A user selects a plan; it activates automatically when the fictional
+    balance covers its price, which is deducted from the balance.
+   - Task rendering and task submission both require an active plan.
+  - This is a classroom simulation, not payment processing or verification.
+    User records are local in demo mode.
+
+7. **Supabase vs local demo** — in `initSupabase()`, `refreshSupabaseData()`,
+   and the database RPC functions
+   - If `SUPABASE_URL` + `SUPABASE_ANON_KEY` are filled in, auth profiles,
+     tasks, submissions, balances, plans, demo balance requests, withdrawals,
+     referrals, settings, and balance history are stored in Supabase.
    - If they are empty, everything is saved in `localStorage` in
      **this browser only**. That is demo mode — see "What will NOT
      work without Supabase" below.
 
 ## How to set up Supabase (free)
 
-You only need this if you want real users on different phones to
-share one set of accounts. Skip it for now if you just want to read
-the code and try it on your own computer.
+Use this to share the school-project simulation across browsers/devices.
+All balances and requests remain fictional; this project does not process
+real payments.
 
 1. Go to https://supabase.com → create a free project.
 2. In the project, open **SQL Editor → New query**.
-3. Copy all of `supabase.sql` into it and press **Run**.
-   - Check: `select count(*) from public.tasks;` should return **90**.
-   - Check: `select * from public.settings;` should show 10 / 5 / 10 / 5%.
+3. Copy all of `supabase.sql` into it and press **Run**. It creates or updates
+  the tables, auth profile trigger, server-side RPC functions, RLS policies,
+  and the 240 task rows. It is designed to be rerun for schema updates.
+  - Check: `select count(*) from public.tasks;` should return **240**.
+  - Check: `select count(*) from public.plan_catalog;` should return **10**.
+  - The script enables RLS and only exposes safe read access; balance-changing
+    actions use the validated RPC functions.
 4. In Supabase go to **Settings → API**. Copy the **Project URL**
    and the **anon / public key** (never the service key).
-5. Open `app.js`, paste them into `CONFIG`:
+5. Open `app.js`, paste the Project URL and the **public anon/publishable key**
+  into `CONFIG`:
    ```js
    SUPABASE_URL: "https://your-project.supabase.co",
    SUPABASE_ANON_KEY: "eyJhbGciOi...",
    ```
-6. **Before real users:** read the Row Level Security (RLS) notes
-   at the bottom of `supabase.sql`. RLS is off by default in this
-   file for learning. Do not collect real bank details without
-   RLS + real Auth. If RLS feels confusing, keep the site in demo
-   mode until someone who knows Supabase helps you.
+6. Open the app and create your first account. Sign in, open **Admin**, and
+  claim the first-admin role. Then use another browser/account to test signup,
+  demo balance requests, admin review, task approval, and shared wallet data.
+7. The Supabase public key is intended for browser use only with these RLS
+  policies. Never use the `service_role` or secret key in `app.js` or GitHub.
+8. Existing accounts/data in browser `localStorage` are not copied into Supabase.
+  Users must sign up again with Supabase Auth; old browser data remains local.
 
 ## How to deploy to Netlify
 
@@ -168,16 +204,18 @@ In local demo mode (Supabase fields empty):
   flow (open two accounts in the same browser to test admin),
   wallet, referrals, withdrawal requests.
 
-With Supabase set up (and RLS added), accounts and data are shared,
-and the admin can see and approve real users.
+With Supabase configured, supported simulation accounts and records are shared,
+and the admin can review task, demo balance, and withdrawal requests.
 
 ## What is NOT in this code — on purpose
 
-- No deposit system. Users never pay to join or to get tasks.
-- No paid plans. No Rs 500 / 2,500 / 5,000 / 10,000 / 25,000 plans.
+- No real deposit processing or verification. The Deposit page only creates
+  local fictional balance requests for classroom demonstration; it does not
+  accept money or upload payment proof.
+- No guaranteed earnings from a plan or daily percentage.
 - No guaranteed daily percent. No 20%, no 15% per day.
-- No screenshot payment upload. No bank account numbers are in
-  this code. The only bank field is the one a *user types in*
+- No screenshot payment upload. No recipient bank account numbers
+  are in this code. The only bank field is the one a *user types in*
   when they request a withdrawal, so the admin knows where to send it.
 - No real passwords or API keys. Supabase keys are placeholders.
 - No code has been pushed to GitHub or deployed to Netlify yet.

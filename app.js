@@ -3,12 +3,13 @@
    Plain JavaScript, written for a beginner to read.
    Read it top to bottom: CONFIG first, then data, then logic.
 
-   SAFE VERSION ONLY — the rules baked into this code:
-   1. Free to join. No deposit, no paid plans, no screenshot upload.
-   2. No guaranteed daily percent. No 20%, no 15%.
-   3. A user earns ONLY after an admin approves a task.
-   4. Referral = 5% of what referred friends earn from TASKS.
-   5. Withdrawal has NO minimum (any amount above Rs 0).
+  DEMO PLAN ACCESS — the rules baked into this code:
+  1. Account creation is free. The app does not process deposits.
+  2. A selected plan activates automatically when simulated balance covers its price.
+  3. No guaranteed daily percent. No 20%, no 15%.
+  4. A user earns ONLY after an admin approves a task.
+  5. Referral = 5% of what referred friends earn from TASKS.
+  6. Withdrawal has NO minimum (any amount above Rs 0).
       Admin pays manually and marks it paid.
    ============================================================ */
 
@@ -17,37 +18,55 @@ const CONFIG = {
   // Supabase — leave empty for LOCAL DEMO MODE.
   // To use a real shared database, create a free Supabase project,
   // run supabase.sql in its SQL Editor, then paste the values here:
-  SUPABASE_URL: "",       // e.g. "https://xyzcompany.supabase.co"
-  SUPABASE_ANON_KEY: "",  // e.g. "eyJhbGciOi..." — the PUBLIC anon key only, never a service key
+  SUPABASE_URL: "https://kozwmakhosoafstqebte.supabase.co",       // e.g. "https://xyzcompany.supabase.co"
+  SUPABASE_ANON_KEY: "sb_publishable_QfriDRpQjoSoJzTjUREsDQ_zVNf5cYW",  // e.g. "eyJhbGciOi..." — the PUBLIC anon key only, never a service key
 
-  // Task rewards. These are EXAMPLES only.
-  // Change them in the Admin panel to match what the company
-  // actually pays you per follow / like / comment.
+  // Legacy-plan task rewards. New plans use their simulated daily reward.
   REWARDS: { Follow: 10, Like: 5, Comment: 10 }, // in PKR (Rs)
 
   // Referral bonus: percent of a referred friend's TASK earnings.
   REFERRAL_PERCENT: 5, // 5%
 
-  DAYS: 30,        // task plan lasts 30 days
+  DAYS: 80,        // task plan lasts 80 days
   TASKS_PER_DAY: 3 // 3 tasks every day
 };
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-/* ---------- 2. THE FIVE CHANNELS (exact links given by the owner) ---------- */
+/* ---------- 2. AVAILABLE 80-DAY ACTIVITY PLANS ---------- */
+let PLANS = [
+  [390, 60], [870, 145], [1890, 315], [3660, 610], [7260, 1210],
+  [14850, 2475], [32820, 5470], [62940, 10490], [136560, 22760], [280830, 46805]
+].map(([amount, dailyReward]) => ({
+  id: "plan-" + amount,
+  amount,
+  dailyReward,
+  days: 80
+}));
+const LEGACY_PLANS = [500, 2500, 5000, 10000, 25000].map(amount => ({
+  id: "plan-" + amount,
+  amount,
+  days: 30
+}));
+function findPlan(planId) {
+  return PLANS.find(plan => plan.id === planId) || LEGACY_PLANS.find(plan => plan.id === planId) || null;
+}
+
+/* ---------- 3. THE FIVE CHANNELS (exact links given by the owner) ---------- */
 const CHANNELS = [
-  { platform: "TikTok",    name: "@not_your_ibrar", url: "https://www.tiktok.com/@not_your_ibrar" },
-  { platform: "TikTok",    name: "@you_know_zakir", url: "https://www.tiktok.com/@you_know_zakir" },
-  { platform: "YouTube",   name: "@oyeah-b8m",      url: "https://youtube.com/@oyeah-b8m" },
-  { platform: "Instagram", name: "@zakir_romi",     url: "https://www.instagram.com/zakir_romi" },
-  { platform: "Facebook",  name: "Facebook channel", url: "https://www.facebook.com/share/1EzUtZgzFa/" }
+  { platform: "TikTok",    name: "@totabhai326",         url: "https://www.tiktok.com/@totabhai326?_r=1&_t=ZS-9BOKPxsHV7R" },
+  { platform: "TikTok",    name: "@abdulrehman65357",    url: "https://www.tiktok.com/@abdulrehman65357?_r=1&_t=ZS-9BOKW7PBZcS" },
+  { platform: "YouTube",   name: "@oyeah-b8m",            url: "https://youtube.com/@oyeah-b8m?si=CM3ErIiYUYRVJiOM" },
+  { platform: "Instagram", name: "@mr_abdulrehman_150", url: "https://www.instagram.com/mr_abdulrehman_150?vrfl=eDM0M2FkcjFubWM2" },
+  { platform: "Facebook",  name: "Facebook channel",     url: "https://www.facebook.com/share/1LxQBJLsBL/" }
 ];
 
 // The three actions rotate. Every task is one of these.
 const ACTIONS = ["Follow", "Like", "Comment"];
 
-/* ---------- 3. TASK PLAN — 30 days × 3 tasks, rotating channels ----------
-   Day 1 uses channels 0,1,2. Day 2 uses 3,4,0. Day 3 uses 1,2,3, and so on.
+/* ---------- 4. TASK PLAN — 80 days × 3 tasks, rotating channels ----------
+  Three consecutive channels are selected each day, rotating through all five.
    That way no day repeats the same channel three times, and over
-   30 days every channel appears many times.
+  80 days every channel appears many times.
    Reward comes from CONFIG.REWARDS, so changing it in Admin
    changes what future approvals pay. */
 function generateTasks() {
@@ -71,7 +90,7 @@ function generateTasks() {
   }
   return tasks;
 }
-const ALL_TASKS = generateTasks();
+let ALL_TASKS = generateTasks();
 
 /* ---------- 4. SUPABASE (optional) ----------
    If CONFIG has a URL + key, we create a Supabase client.
@@ -79,6 +98,14 @@ const ALL_TASKS = generateTasks();
    localStorage (demo mode). Nothing breaks either way. */
 let supabaseClient = null;
 let useSupabase = false;
+const remoteCache = {
+  users: [], submissions: [], withdrawals: [], depositRequests: [],
+  history: [], dailyTaskPayouts: [], settings: null, adminExists: null
+};
+const remoteCacheKeys = new Set([
+  "users", "submissions", "withdrawals", "depositRequests",
+  "history", "dailyTaskPayouts", "settings"
+]);
 function initSupabase() {
   if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY && typeof supabase !== "undefined") {
     supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
@@ -87,6 +114,81 @@ function initSupabase() {
   } else {
     console.log("Local demo mode: Supabase not configured. See README.md.");
   }
+}
+
+function mapSupabaseProfile(row) {
+  return {
+    id: row.id, name: row.full_name, email: row.email,
+    referralCode: row.referral_code, referredBy: row.referred_by,
+    planRequestId: row.plan_request_id, activePlanId: row.active_plan_id,
+    planStartedAt: row.plan_started_at, planExpiresAt: row.plan_expires_at,
+    isAdmin: row.is_admin, balance: Number(row.balance_rs),
+    taskEarnings: Number(row.task_earnings_rs), referralEarnings: Number(row.referral_earnings_rs),
+    totalWithdrawn: Number(row.total_withdrawn_rs)
+  };
+}
+
+async function refreshSupabaseData() {
+  if (!useSupabase || !currentUser) return;
+  const [profiles, tasks, submissions, withdrawals, deposits, history, payouts, settings, plans, adminStatus] = await Promise.all([
+    supabaseClient.from("profiles").select("*"),
+    supabaseClient.from("tasks").select("id,day_number,platform,channel_name,channel_url,action,reward_rs").order("day_number").order("id"),
+    supabaseClient.from("task_submissions").select("id,user_id,task_id,status,reward_rs,created_at"),
+    supabaseClient.from("withdrawals").select("id,user_id,amount_rs,phone,bank_account,status,created_at"),
+    supabaseClient.from("demo_balance_requests").select("id,user_id,amount_rs,status,created_at"),
+    supabaseClient.from("balance_history").select("id,user_id,description,amount_rs,created_at"),
+    supabaseClient.from("daily_task_payouts").select("user_id,plan_started_at,day_number"),
+    supabaseClient.from("settings").select("follow_rs,like_rs,comment_rs,referral_percent").eq("id", 1).maybeSingle(),
+    supabaseClient.from("plan_catalog").select("id,price_rs,daily_reward_rs,duration_days").order("price_rs"),
+    supabaseClient.rpc("admin_exists")
+  ]);
+  const failed = [profiles, tasks, submissions, withdrawals, deposits, history, payouts, settings, plans, adminStatus].find(result => result.error);
+  if (failed?.error) throw failed.error;
+
+  remoteCache.users = profiles.data.map(mapSupabaseProfile);
+  remoteCache.adminExists = adminStatus.data;
+  if (plans.data.length) {
+    PLANS = plans.data.map(plan => ({
+      id: plan.id, amount: Number(plan.price_rs),
+      dailyReward: Number(plan.daily_reward_rs), days: plan.duration_days
+    }));
+  }
+  ALL_TASKS = tasks.data.map(task => ({
+    id: task.id, day: task.day_number, platform: task.platform,
+    channel: task.channel_name, url: task.channel_url, action: task.action, reward: Number(task.reward_rs)
+  }));
+  const taskById = new Map(ALL_TASKS.map(task => [task.id, task]));
+  const userById = new Map(remoteCache.users.map(user => [user.id, user]));
+  remoteCache.submissions = submissions.data.map(row => {
+    const task = taskById.get(row.task_id) || {};
+    return {
+      id: row.id, userId: row.user_id, userName: userById.get(row.user_id)?.name || "User",
+      taskId: row.task_id, day: task.day, platform: task.platform, channel: task.channel,
+      action: task.action, reward: Number(row.reward_rs), status: row.status, createdAt: row.created_at
+    };
+  });
+  remoteCache.withdrawals = withdrawals.data.map(row => ({
+    id: row.id, userId: row.user_id, userName: userById.get(row.user_id)?.name || "User",
+    amount: Number(row.amount_rs), phone: row.phone, bank: row.bank_account,
+    status: row.status, createdAt: row.created_at
+  }));
+  remoteCache.depositRequests = deposits.data.map(row => ({
+    id: row.id, userId: row.user_id, userName: userById.get(row.user_id)?.name || "User",
+    amount: Number(row.amount_rs), status: row.status, createdAt: row.created_at
+  }));
+  remoteCache.history = history.data.map(row => ({
+    id: row.id, userId: row.user_id, text: row.description,
+    amount: Number(row.amount_rs), createdAt: row.created_at
+  }));
+  remoteCache.dailyTaskPayouts = payouts.data.map(row => [row.user_id, row.plan_started_at, row.day_number].join(":"));
+  if (settings.data) {
+    remoteCache.settings = {
+      rewards: { Follow: Number(settings.data.follow_rs), Like: Number(settings.data.like_rs), Comment: Number(settings.data.comment_rs) },
+      referralPercent: Number(settings.data.referral_percent)
+    };
+  }
+  currentUser = remoteCache.users.find(user => user.id === currentUser.id) || currentUser;
+  sessionStorage.setItem("ame_session", JSON.stringify(currentUser));
 }
 
 /* ---------- 5. LOCAL STORAGE (demo mode) ----------
@@ -98,10 +200,14 @@ function initSupabase() {
    passwords securely and we do not store them at all. */
 const store = {
   get(key, fallback) {
+    if (useSupabase && remoteCacheKeys.has(key)) return remoteCache[key] ?? fallback;
     try { return JSON.parse(localStorage.getItem("ame_" + key)) ?? fallback; }
     catch (e) { return fallback; }
   },
-  set(key, value) { localStorage.setItem("ame_" + key, JSON.stringify(value)); }
+  set(key, value) {
+    if (useSupabase && remoteCacheKeys.has(key)) { remoteCache[key] = value; return; }
+    localStorage.setItem("ame_" + key, JSON.stringify(value));
+  }
 };
 // Tiny demo hash — for learning only, not real security.
 function demoHash(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; } return "h" + h; }
@@ -112,6 +218,7 @@ function makeReferralCode(name) {
 
 // Current logged-in user (kept in memory + sessionStorage).
 let currentUser = JSON.parse(sessionStorage.getItem("ame_session") || "null");
+let taskUnlockTimer = null;
 
 /* ---------- 6. HELPERS ---------- */
 function rs(n) { return "Rs " + Number(n || 0).toLocaleString("en-PK"); }
@@ -124,6 +231,8 @@ function getSubmissions() { return store.get("submissions", []); }
 function saveSubmissions(s) { store.set("submissions", s); }
 function getWithdrawals() { return store.get("withdrawals", []); }
 function saveWithdrawals(w) { store.set("withdrawals", w); }
+function getDepositRequests() { return store.get("depositRequests", []); }
+function saveDepositRequests(requests) { store.set("depositRequests", requests); }
 function getHistory() { return store.get("history", []); }
 function saveHistory(h) { store.set("history", h); }
 function getSettings() {
@@ -134,14 +243,28 @@ function getSettings() {
 function saveSettingsLocal(s) { store.set("settings", s); }
 
 /* ---------- 7. VIEWS — show one section, hide the rest ---------- */
-function showView(name) {
+async function showView(name) {
+  if (name !== "tasks" && taskUnlockTimer !== null) {
+    clearTimeout(taskUnlockTimer);
+    taskUnlockTimer = null;
+  }
   document.querySelectorAll(".view").forEach(v => v.style.display = "none");
   const el = $("view-" + name);
   if (el) el.style.display = "block";
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  if (useSupabase && currentUser) {
+    try { await refreshSupabaseData(); }
+    catch (error) {
+      const message = $("adminMsg");
+      if (message) message.textContent = "Could not refresh shared data: " + error.message;
+      console.error("Could not refresh Supabase app data:", error);
+    }
+  }
   if (name === "tasks") renderTasks();
+  if (name === "plans") renderPlans();
   if (name === "wallet") renderWallet();
   if (name === "referrals") renderReferrals();
+  if (name === "deposit") renderDeposit();
   if (name === "withdraw") renderWithdraw();
   if (name === "admin") renderAdmin();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -162,7 +285,9 @@ async function handleSignup() {
 
   // --- Supabase mode: use Supabase Auth (secure passwords) ---
   if (useSupabase) {
-    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: name } } });
+    const { data, error } = await supabaseClient.auth.signUp({
+      email, password, options: { data: { full_name: name, referral_code: refCode || null } }
+    });
     if (error) { msg.textContent = error.message; return; }
     msg.textContent = "Account created. Please check your email if asked, then login.";
     showView("login");
@@ -186,6 +311,7 @@ async function handleSignup() {
     passwordHash: demoHash(password), // demo only — see warning above
     referralCode: makeReferralCode(name),
     referredBy: referredBy,
+    planRequestId: null, activePlanId: null, planExpiresAt: null,
     isAdmin: false,
     balance: 0, taskEarnings: 0, referralEarnings: 0, totalWithdrawn: 0,
     createdAt: new Date().toISOString()
@@ -204,10 +330,13 @@ async function handleLogin() {
   if (useSupabase) {
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) { msg.textContent = error.message; return; }
-    // In Supabase mode the profile row is the source of truth.
-    // For this demo we create a light local session from the auth user.
-    const u = { id: data.user.id, name: data.user.user_metadata?.full_name || email, email, referralCode: "", referredBy: null, isAdmin: false, balance: 0, taskEarnings: 0, referralEarnings: 0, totalWithdrawn: 0 };
-    loginAs(u);
+    currentUser = { id: data.user.id };
+    try {
+      await refreshSupabaseData();
+      loginAs(currentUser);
+    } catch (loadError) {
+      msg.textContent = "Signed in, but profile data could not be loaded: " + loadError.message;
+    }
     return;
   }
 
@@ -240,8 +369,11 @@ function refreshAuthUI() {
   $("signupBtn").style.display = loggedIn ? "none" : "";
   $("logoutBtn").style.display = loggedIn ? "" : "none";
   $("helloUser").textContent = loggedIn ? ("Hi, " + currentUser.name) : "";
-  // Admin menu is only visible to admins (see renderAdmin for the rule).
-  $("adminNavBtn").style.display = (loggedIn && currentUser.isAdmin) ? "" : "none";
+  // In local demo mode, let the first user reach the claim-admin screen.
+  const canClaimFirstAdmin = loggedIn && (useSupabase
+    ? remoteCache.adminExists === false
+    : !getUsers().some(user => user.isAdmin));
+  $("adminNavBtn").style.display = (loggedIn && (currentUser.isAdmin || canClaimFirstAdmin)) ? "" : "none";
   if (loggedIn) updateStats();
 }
 
@@ -263,15 +395,55 @@ function updateStats() {
    CONDITION: submitting does NOT pay yet. Status = "pending".
    Only an admin approval (section 12) adds money. */
 function renderTasks() {
+  const workspace = $("taskWorkspace");
+  const notice = $("taskAccessNotice");
+  const activePlan = getActivePlan(currentUser);
+  if (!activePlan) {
+    workspace.style.display = "none";
+    notice.style.display = "block";
+    notice.innerHTML = currentUser
+      ? "<p>Choose an 80-day plan. It activates automatically when your simulated balance covers its price.</p><button class='btn btn-primary' onclick=\"showView('plans')\">View plans</button>"
+      : "<p>Log in and get an active plan to access tasks.</p><button class='btn btn-primary' onclick=\"showView('login')\">Login</button>";
+    return;
+  }
+  notice.style.display = "none";
+  workspace.style.display = "block";
+  const unlockedDay = getUnlockedTaskDay(currentUser, activePlan);
+
   const sel = $("daySelect");
-  if (sel.options.length === 0) {
-    for (let d = 1; d <= CONFIG.DAYS; d++) {
+  if (sel.options.length !== activePlan.days) {
+    sel.innerHTML = "";
+    for (let d = 1; d <= activePlan.days; d++) {
       const o = document.createElement("option");
       o.value = d; o.textContent = "Day " + d;
       sel.appendChild(o);
     }
   }
-  const day = Number(sel.value || 1);
+  Array.from(sel.options).forEach(option => {
+    const optionDay = Number(option.value);
+    option.disabled = optionDay > unlockedDay;
+    option.textContent = option.disabled ? "Day " + optionDay + " (Locked)" : "Day " + optionDay;
+  });
+  const selectedDay = Number(sel.value || 1);
+  const day = selectedDay <= unlockedDay ? selectedDay : unlockedDay;
+  sel.value = String(day);
+
+  const unlockNotice = $("taskUnlockNotice");
+  if (unlockedDay < activePlan.days) {
+    const nextUnlockAt = getPlanStartTime(currentUser, activePlan) + unlockedDay * DAY_MS;
+    unlockNotice.textContent = "Day " + (unlockedDay + 1) + " unlocks at " + new Date(nextUnlockAt).toLocaleString() + ".";
+    clearTimeout(taskUnlockTimer);
+    const userId = currentUser.id;
+    taskUnlockTimer = setTimeout(() => {
+      taskUnlockTimer = null;
+      if (currentUser?.id === userId && $("view-tasks").style.display !== "none") renderTasks();
+    }, Math.max(nextUnlockAt - Date.now() + 50, 0));
+  } else {
+    unlockNotice.textContent = "All task days are unlocked.";
+    clearTimeout(taskUnlockTimer);
+    taskUnlockTimer = null;
+  }
+
   const settings = getSettings();
   const list = $("taskList");
   const subs = getSubmissions();
@@ -285,9 +457,14 @@ function renderTasks() {
     const div = document.createElement("div");
     div.className = "task-card";
     div.innerHTML =
-      "<div><h4>" + task.action + " — " + esc(task.channel) + "</h4>" +
-      "<p>" + esc(task.platform) + " • Day " + task.day + " • <span class='reward'>" + rs(reward) + "</span> after approval</p></div>" +
-      "<div>" +
+      "<div class='task-card-content'>" +
+        "<p class='task-platform'>" + esc(task.platform) + "</p>" +
+        "<h3>" + esc(task.action) + " <span>— " + esc(task.channel) + "</span></h3>" +
+        "<p class='task-details'>Day " + task.day + " • " + (activePlan.dailyReward
+          ? "Part of <span class='reward'>" + rs(activePlan.dailyReward) + " daily simulation reward</span>; all 3 tasks must be approved"
+          : "<span class='reward'>" + rs(reward) + "</span> after approval") + "</p>" +
+      "</div>" +
+      "<div class='task-card-actions'>" +
         "<a class='btn btn-outline btn-small' href='" + task.url + "' target='_blank' rel='noopener'>Open channel</a> " +
         (sub
           ? "<span class='badge " + sub.status + "'>" + sub.status.toUpperCase() + "</span>"
@@ -300,31 +477,149 @@ function renderTasks() {
 
 async function submitTask(taskId) {
   if (!currentUser) { $("tasksMsg").textContent = "Please login first."; showView("login"); return; }
+  const activePlan = getActivePlan(currentUser);
+  if (!activePlan) {
+    $("tasksMsg").textContent = "An active plan is required to submit tasks.";
+    showView("plans");
+    return;
+  }
   const task = ALL_TASKS.find(t => t.id === taskId);
   if (!task) return;
+  if (task.day > getUnlockedTaskDay(currentUser)) {
+    $("tasksMsg").textContent = "Day " + task.day + " is locked. New task days unlock every 24 hours after your plan starts.";
+    return;
+  }
   const subs = getSubmissions();
   if (subs.find(s => s.userId === currentUser.id && s.taskId === taskId)) {
     $("tasksMsg").textContent = "You already submitted this task.";
+    return;
+  }
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("submit_task", { p_task_id: task.id });
+    if (error) { $("tasksMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); }
+    catch (loadError) { $("tasksMsg").textContent = "Task submitted, but refresh failed: " + loadError.message; return; }
+    $("tasksMsg").textContent = "Submitted for admin review.";
+    renderTasks();
     return;
   }
   const settings = getSettings();
   const sub = {
     id: "S" + Date.now(), userId: currentUser.id, userName: currentUser.name,
     taskId: task.id, day: task.day, platform: task.platform, channel: task.channel,
-    action: task.action, reward: settings.rewards[task.action] ?? task.reward,
+    action: task.action, reward: activePlan.dailyReward ? 0 : (settings.rewards[task.action] ?? task.reward),
     status: "pending", createdAt: new Date().toISOString()
   };
   subs.push(sub);
   saveSubmissions(subs);
-
-  // Supabase mode: also write the row to the shared table.
-  if (useSupabase) {
-    await supabaseClient.from("task_submissions").insert({
-      user_id: currentUser.id, task_id: task.id, status: "pending", reward_rs: sub.reward
-    });
-  }
   $("tasksMsg").textContent = "Submitted for approval. You will be paid only if an admin approves it.";
   renderTasks();
+}
+
+function getActivePlan(user) {
+  if (!user?.activePlanId || !user.planExpiresAt || Date.parse(user.planExpiresAt) <= Date.now()) return null;
+  return findPlan(user.activePlanId);
+}
+
+function getPlanStartTime(user, plan) {
+  const startedAt = Date.parse(user?.planStartedAt || "");
+  if (Number.isFinite(startedAt)) return startedAt;
+  const expiresAt = Date.parse(user?.planExpiresAt || "");
+  return Number.isFinite(expiresAt) ? expiresAt - plan.days * DAY_MS : Date.now();
+}
+
+function getUnlockedTaskDay(user, plan = getActivePlan(user)) {
+  if (!plan) return 0;
+  const elapsed = Math.max(0, Date.now() - getPlanStartTime(user, plan));
+  return Math.min(plan.days, Math.floor(elapsed / DAY_MS) + 1);
+}
+
+function activateRequestedPlan(user) {
+  const plan = findPlan(user?.planRequestId);
+  if (!user || !plan || getActivePlan(user) || Number(user.balance) < plan.amount) return false;
+
+  const startedAt = Date.now();
+  user.balance -= plan.amount;
+  user.activePlanId = plan.id;
+  user.planStartedAt = new Date(startedAt).toISOString();
+  user.planExpiresAt = new Date(startedAt + plan.days * DAY_MS).toISOString();
+  user.planRequestId = null;
+
+  const history = getHistory();
+  history.push({ userId: user.id, text: "Plan activated automatically: " + rs(plan.amount) + " simulation balance used", amount: -plan.amount });
+  saveHistory(history);
+
+  if (currentUser?.id === user.id) {
+    currentUser = user;
+    sessionStorage.setItem("ame_session", JSON.stringify(user));
+  }
+  return true;
+}
+
+function renderPlans() {
+  const users = getUsers();
+  const planUser = users.find(user => user.id === currentUser?.id) || currentUser;
+  if (!useSupabase && planUser?.planRequestId && activateRequestedPlan(planUser)) saveUsers(users);
+  if (currentUser && planUser) {
+    currentUser = planUser;
+    sessionStorage.setItem("ame_session", JSON.stringify(planUser));
+  }
+  const activePlan = getActivePlan(currentUser);
+  const requestedPlan = findPlan(currentUser?.planRequestId);
+  $("plansStatus").textContent = activePlan
+    ? "Active: " + rs(activePlan.amount) + " plan, until " + new Date(currentUser.planExpiresAt).toLocaleDateString()
+    : requestedPlan
+      ? "Selected: " + rs(requestedPlan.amount) + ". It activates automatically when your balance reaches " + rs(requestedPlan.amount) + "."
+      : "Choose an 80-day plan. It activates automatically when your balance covers its price.";
+  $("plansList").innerHTML = PLANS.map(plan =>
+    {
+      const selected = currentUser?.planRequestId === plan.id;
+      const disabled = !currentUser || !!activePlan || !!requestedPlan;
+      const buttonText = activePlan ? "Plan active" : selected ? "Selected" : requestedPlan ? "Another plan selected" : "Choose plan";
+      return "<article class='plan-card'><h3>" + rs(plan.amount) + " activity</h3>" +
+        "<p class='plan-duration'>" + plan.days + " days</p>" +
+        "<p class='plan-daily-reward'>Rs " + Number(plan.dailyReward).toLocaleString("en-PK") + " simulated daily reward</p>" +
+        "<button class='btn btn-primary' " + (disabled ? "disabled" : "onclick=\"requestPlan('" + plan.id + "')\"") + ">" + buttonText + "</button></article>";
+    }
+  ).join("");
+  $("plansMsg").textContent = currentUser
+    ? requestedPlan
+      ? "Selected plan price: " + rs(requestedPlan.amount) + ". Current balance: " + rs(currentUser.balance) + ". The price is deducted when the plan activates."
+      : "The plan price is deducted from your fictional balance when it activates. No real money is paid."
+    : "Log in to choose a plan. All balances and plan prices are fictional school-project values.";
+}
+
+function requestPlan(planId) {
+  if (!currentUser) { showView("login"); return; }
+  if (!PLANS.some(plan => plan.id === planId) || getActivePlan(currentUser) || currentUser.planRequestId) return;
+  if (useSupabase) {
+    supabaseClient.rpc("select_plan", { p_plan_id: planId }).then(async ({ error }) => {
+      if (error) { $("plansMsg").textContent = error.message; return; }
+      try {
+        await refreshSupabaseData();
+        const selected = findPlan(currentUser.planRequestId);
+        $("plansMsg").textContent = currentUser.activePlanId
+          ? "Plan activated automatically; the fictional plan price was deducted."
+          : "Plan selected. It will activate when your balance reaches " + rs(selected?.amount) + ".";
+        renderPlans();
+      } catch (loadError) {
+        $("plansMsg").textContent = "Plan saved, but refresh failed: " + loadError.message;
+      }
+    });
+    return;
+  }
+  const users = getUsers();
+  const user = users.find(item => item.id === currentUser.id);
+  if (!user) return;
+  user.planRequestId = planId;
+  const activated = activateRequestedPlan(user);
+  saveUsers(users);
+  currentUser = user;
+  sessionStorage.setItem("ame_session", JSON.stringify(user));
+  $("plansMsg").textContent = activated
+    ? "Plan activated automatically. Its fictional price was deducted from your balance."
+    : "Plan selected. It will activate automatically when your balance reaches " + rs(findPlan(planId).amount) + ".";
+  renderPlans();
 }
 
 /* ---------- 10. WALLET ---------- */
@@ -346,6 +641,19 @@ function renderWallet() {
    gets REFERRAL_PERCENT of that task reward — e.g. 5% of Rs 10 = Rs 0.50. */
 function renderReferrals() {
   if (!currentUser) { showView("login"); return; }
+  if (useSupabase) {
+    supabaseClient.rpc("get_my_referred_friends").then(({ data, error }) => {
+      if (error) { $("refList").innerHTML = "<li>Could not load referrals: " + esc(error.message) + "</li>"; return; }
+      $("refCount").textContent = data.length;
+      $("refList").innerHTML = data.length
+        ? data.map(friend => "<li><span>" + esc(friend.full_name) + " (" + esc(friend.email) + ")</span><span>Task earnings: " + rs(friend.task_earnings_rs) + "</span></li>").join("")
+        : "<li>No friends joined with your code yet.</li>";
+    });
+    const user = getUsers().find(item => item.id === currentUser.id) || currentUser;
+    $("myReferralCode").value = user.referralCode || "";
+    $("refEarnings").textContent = rs(user.referralEarnings);
+    return;
+  }
   const u = getUsers().find(x => x.id === currentUser.id) || currentUser;
   $("myReferralCode").value = u.referralCode || "";
   const friends = getUsers().filter(x => x.referredBy === u.id);
@@ -360,6 +668,93 @@ function copyReferral() {
   input.select();
   navigator.clipboard?.writeText(input.value);
   alert("Referral code copied: " + input.value);
+}
+
+/* ---------- DEMO DEPOSITS ---------- */
+function renderDeposit() {
+  if (!currentUser) { showView("login"); return; }
+  const user = getUsers().find(item => item.id === currentUser.id) || currentUser;
+  $("depositBalance").textContent = rs(user.balance);
+  const requests = getDepositRequests().filter(request => request.userId === user.id).slice().reverse();
+  $("depositList").innerHTML = requests.length
+    ? requests.map(request => "<li><span>" + rs(request.amount) + " • " + new Date(request.createdAt).toLocaleString() + "</span><span class='badge " + request.status + "'>" + request.status.toUpperCase() + "</span></li>").join("")
+    : "<li>No demo balance requests yet.</li>";
+}
+
+async function requestDemoDeposit() {
+  if (!currentUser) { showView("login"); return; }
+  const amount = Number($("depositAmount").value);
+  const message = $("depositMsg");
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    message.textContent = "Enter a whole-number demo amount greater than Rs 0.";
+    return;
+  }
+  const requests = getDepositRequests();
+  if (requests.some(request => request.userId === currentUser.id && request.status === "pending")) {
+    message.textContent = "You already have a pending demo balance request.";
+    return;
+  }
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("request_demo_balance", { p_amount: amount });
+    if (error) { message.textContent = error.message; return; }
+    $("depositAmount").value = "";
+    message.textContent = "Demo balance request sent to the admin for review.";
+    try { await refreshSupabaseData(); renderDeposit(); }
+    catch (loadError) { message.textContent = "Request sent, but refresh failed: " + loadError.message; }
+    return;
+  }
+  requests.push({
+    id: "D" + Date.now(), userId: currentUser.id, userName: currentUser.name,
+    amount, status: "pending", createdAt: new Date().toISOString()
+  });
+  saveDepositRequests(requests);
+  $("depositAmount").value = "";
+  message.textContent = "Demo balance request sent to the admin for review.";
+  renderDeposit();
+}
+
+async function approveDemoDeposit(requestId) {
+  if (!currentUser?.isAdmin) return;
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("review_demo_balance", { p_request_id: requestId, p_approve: true });
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); renderAdmin(); }
+    catch (loadError) { $("adminMsg").textContent = "Request approved, but refresh failed: " + loadError.message; }
+    return;
+  }
+  const requests = getDepositRequests();
+  const request = requests.find(item => item.id === requestId && item.status === "pending");
+  const users = getUsers();
+  const user = users.find(item => item.id === request?.userId);
+  if (!request || !user) return;
+  request.status = "approved";
+  user.balance = Number(user.balance || 0) + request.amount;
+  const history = getHistory();
+  history.push({ userId: user.id, text: "Demo balance request approved", amount: request.amount });
+  saveHistory(history);
+  activateRequestedPlan(user);
+  saveUsers(users);
+  saveDepositRequests(requests);
+  renderAdmin();
+  if (currentUser.id === user.id) renderDeposit();
+}
+
+async function rejectDemoDeposit(requestId) {
+  if (!currentUser?.isAdmin) return;
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("review_demo_balance", { p_request_id: requestId, p_approve: false });
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); renderAdmin(); }
+    catch (loadError) { $("adminMsg").textContent = "Request rejected, but refresh failed: " + loadError.message; }
+    return;
+  }
+  const requests = getDepositRequests();
+  const request = requests.find(item => item.id === requestId && item.status === "pending");
+  if (!request) return;
+  request.status = "rejected";
+  saveDepositRequests(requests);
+  renderAdmin();
+  if (currentUser.id === request.userId) renderDeposit();
 }
 
 /* ---------- 12. WITHDRAW ----------
@@ -389,6 +784,17 @@ async function handleWithdraw() {
   if (!amount || amount <= 0) { msg.textContent = "Enter an amount above Rs 0."; return; }
   if (!phone || !bank) { msg.textContent = "Please add your phone number and bank account."; return; }
 
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("request_withdrawal", {
+      p_amount: amount, p_phone: phone, p_bank_account: bank
+    });
+    if (error) { msg.textContent = error.message; return; }
+    msg.textContent = "Simulation withdrawal request sent.";
+    try { await refreshSupabaseData(); renderWithdraw(); updateStats(); }
+    catch (loadError) { msg.textContent = "Request sent, but refresh failed: " + loadError.message; }
+    return;
+  }
+
   const users = getUsers();
   const u = users.find(x => x.id === currentUser.id);
   if (!u) return;
@@ -402,9 +808,6 @@ async function handleWithdraw() {
     amount, phone, bank, status: "pending", createdAt: new Date().toISOString()
   };
   const all = getWithdrawals(); all.push(w); saveWithdrawals(all);
-  if (useSupabase) {
-    await supabaseClient.from("withdrawals").insert({ user_id: u.id, amount_rs: amount, phone, bank_account: bank, status: "pending" });
-  }
   msg.textContent = "Request sent. An admin will send the money manually and mark it paid.";
   renderWithdraw(); updateStats();
 }
@@ -432,22 +835,48 @@ function renderAdmin() {
 
   const pendingTasks = getSubmissions().filter(s => s.status === "pending");
   $("adminTasks").innerHTML = pendingTasks.length
-    ? pendingTasks.map(s => "<li><span>" + esc(s.userName) + " • Day " + s.day + " • " + s.action + " " + esc(s.channel) + " • " + rs(s.reward) + "</span><span><button class='btn btn-primary btn-small' onclick=\"approveTask('" + s.id + "')\">Approve</button> <button class='btn btn-outline btn-small' onclick=\"rejectTask('" + s.id + "')\">Reject</button></span></li>").join("")
+    ? pendingTasks.map(s => {
+      const taskUser = users.find(user => user.id === s.userId);
+      const taskPlan = findPlan(taskUser?.activePlanId);
+      const rewardLabel = taskPlan?.dailyReward
+        ? "part of " + rs(taskPlan.dailyReward) + " daily simulation reward"
+        : rs(s.reward);
+      return "<li><span>" + esc(s.userName) + " • Day " + s.day + " • " + s.action + " " + esc(s.channel) + " • " + rewardLabel + "</span><span><button class='btn btn-primary btn-small' onclick=\"approveTask('" + s.id + "')\">Approve</button> <button class='btn btn-outline btn-small' onclick=\"rejectTask('" + s.id + "')\">Reject</button></span></li>";
+    }).join("")
     : "<li>No pending tasks.</li>";
+
+  const pendingDeposits = getDepositRequests().filter(request => request.status === "pending");
+  $("adminDeposits").innerHTML = pendingDeposits.length
+    ? pendingDeposits.map(request => "<li><span>" + esc(request.userName) + " • " + rs(request.amount) + " demo balance • " + new Date(request.createdAt).toLocaleString() + "</span><span><button class='btn btn-primary btn-small' onclick=\"approveDemoDeposit('" + request.id + "')\">Accept</button> <button class='btn btn-outline btn-small' onclick=\"rejectDemoDeposit('" + request.id + "')\">Reject</button></span></li>").join("")
+    : "<li>No pending demo balance requests.</li>";
 
   const pendingW = getWithdrawals().filter(w => w.status === "pending");
   $("adminWithdrawals").innerHTML = pendingW.length
     ? pendingW.map(w => "<li><span>" + esc(w.userName) + " • " + rs(w.amount) + " • " + esc(w.phone) + " • " + esc(w.bank) + "</span><span><button class='btn btn-primary btn-small' onclick=\"payWithdrawal('" + w.id + "')\">Mark paid</button> <button class='btn btn-outline btn-small' onclick=\"rejectWithdrawal('" + w.id + "')\">Reject + refund</button></span></li>").join("")
     : "<li>No pending withdrawals.</li>";
 
-  $("adminUsers").innerHTML = users.map(u =>
-    "<li><span>" + esc(u.name) + " (" + esc(u.email) + ") • Balance " + rs(u.balance) + " • Referred " + getUsers().filter(x => x.referredBy === u.id).length + "</span>" +
-    (u.isAdmin ? "<span class='badge approved'>ADMIN</span>"
-               : "<button class='btn btn-outline btn-small' onclick=\"promoteUser('" + u.id + "')\">Make admin</button>") +
-    "</li>").join("");
+  $("adminUsers").innerHTML = users.map(u => {
+    const activePlan = getActivePlan(u);
+    const requestedPlan = findPlan(u.planRequestId);
+    const planStatus = requestedPlan
+      ? "<span class='badge'>WAITING FOR " + rs(requestedPlan.amount) + " BALANCE</span>"
+      : activePlan
+        ? "<span class='badge approved'>" + rs(activePlan.amount) + " ACTIVE</span>"
+        : "<span class='badge'>NO ACTIVE PLAN</span>";
+    return "<li><span>" + esc(u.name) + " (" + esc(u.email) + ") • Balance " + rs(u.balance) + " • Referred " + getUsers().filter(x => x.referredBy === u.id).length + "</span>" +
+      "<span>" + planStatus + " " + (u.isAdmin ? "<span class='badge approved'>ADMIN</span>" : "<button class='btn btn-outline btn-small' onclick=\"promoteUser('" + u.id + "')\">Make admin</button>") + "</span></li>";
+  }).join("");
 }
 
-function claimAdmin() {
+async function claimAdmin() {
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("claim_first_admin");
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    await refreshSupabaseData();
+    refreshAuthUI();
+    renderAdmin();
+    return;
+  }
   const users = getUsers();
   if (users.some(u => u.isAdmin)) { alert("An admin already exists."); return; }
   const me = users.find(u => u.id === currentUser.id);
@@ -460,7 +889,14 @@ function claimAdmin() {
   renderAdmin();
 }
 
-function promoteUser(userId) {
+async function promoteUser(userId) {
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("promote_user", { p_user_id: userId });
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    await refreshSupabaseData();
+    renderAdmin();
+    return;
+  }
   const users = getUsers();
   const u = users.find(x => x.id === userId);
   if (!u) return;
@@ -469,7 +905,7 @@ function promoteUser(userId) {
   renderAdmin();
 }
 
-function saveSettings() {
+async function saveSettings() {
   const settings = {
     rewards: {
       Follow: Number($("setFollow").value) || 10,
@@ -478,19 +914,33 @@ function saveSettings() {
     },
     referralPercent: Number($("setReferral").value) || 5
   };
-  saveSettingsLocal(settings);
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("update_settings", {
+      p_follow: settings.rewards.Follow, p_like: settings.rewards.Like,
+      p_comment: settings.rewards.Comment, p_referral: settings.referralPercent
+    });
+    if (error) { $("settingsMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); }
+    catch (loadError) { $("settingsMsg").textContent = "Settings saved, but refresh failed: " + loadError.message; return; }
+  } else {
+    saveSettingsLocal(settings);
+  }
   // Keep the in-memory CONFIG in step for this session.
   CONFIG.REWARDS = settings.rewards;
   CONFIG.REFERRAL_PERCENT = settings.referralPercent;
-  $("settingsMsg").textContent = "Settings saved. New tasks will pay these rates.";
-  if (useSupabase) {
-    supabaseClient.from("settings").upsert({ id: 1, follow_rs: settings.rewards.Follow, like_rs: settings.rewards.Like, comment_rs: settings.rewards.Comment, referral_percent: settings.referralPercent });
-  }
+  $("settingsMsg").textContent = "Settings saved. Legacy plans will use these per-task rates.";
 }
 
 /* Approve a task: pay the user, THEN pay the referrer 5%.
    This is the ONLY place task money is created. */
-function approveTask(subId) {
+async function approveTask(subId) {
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("review_task", { p_submission_id: subId, p_approve: true });
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); renderAdmin(); updateStats(); }
+    catch (loadError) { $("adminMsg").textContent = "Task reviewed, but refresh failed: " + loadError.message; }
+    return;
+  }
   const subs = getSubmissions();
   const sub = subs.find(s => s.id === subId);
   if (!sub || sub.status !== "pending") return;
@@ -500,32 +950,58 @@ function approveTask(subId) {
   const users = getUsers();
   const earner = users.find(u => u.id === sub.userId);
   if (earner) {
-    earner.balance += sub.reward;
-    earner.taskEarnings += sub.reward;
+    const plan = findPlan(earner.activePlanId);
+    let payout = sub.reward;
+    let payoutText = "Task approved: " + sub.action + " " + sub.channel + " (Day " + sub.day + ")";
+
+    if (plan?.dailyReward) {
+      const dayTaskIds = new Set(ALL_TASKS.filter(task => task.day === sub.day).map(task => task.id));
+      const approvedCount = subs.filter(item => item.userId === earner.id && dayTaskIds.has(item.taskId) && item.status === "approved").length;
+      const payoutKey = [earner.id, earner.planStartedAt || earner.planExpiresAt, sub.day].join(":");
+      const paidDays = store.get("dailyTaskPayouts", []);
+      if (approvedCount < dayTaskIds.size || paidDays.includes(payoutKey)) {
+        renderAdmin(); updateStats();
+        return;
+      }
+      paidDays.push(payoutKey);
+      store.set("dailyTaskPayouts", paidDays);
+      payout = plan.dailyReward;
+      payoutText = "Daily task reward: Day " + sub.day + " completed";
+    }
+
+    earner.balance += payout;
+    earner.taskEarnings += payout;
     const history = getHistory();
-    history.push({ userId: earner.id, text: "Task approved: " + sub.action + " " + sub.channel + " (Day " + sub.day + ")", amount: sub.reward });
+    history.push({ userId: earner.id, text: payoutText, amount: payout });
     saveHistory(history);
 
-    // Referral bonus: 5% of THIS task reward, paid to the referrer.
-    // Example: 5% of Rs 10 = Rs 0.50.
     if (earner.referredBy) {
       const referrer = users.find(u => u.id === earner.referredBy);
       if (referrer) {
         const settings = getSettings();
-        const bonus = Math.round(sub.reward * settings.referralPercent) / 100;
+        const bonus = Math.round(payout * settings.referralPercent) / 100;
         referrer.balance += bonus;
         referrer.referralEarnings += bonus;
         const h2 = getHistory();
         h2.push({ userId: referrer.id, text: "Referral bonus from " + earner.name, amount: bonus });
         saveHistory(h2);
+        activateRequestedPlan(referrer);
       }
     }
+    activateRequestedPlan(earner);
     saveUsers(users);
   }
   renderAdmin(); updateStats();
 }
 
-function rejectTask(subId) {
+async function rejectTask(subId) {
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("review_task", { p_submission_id: subId, p_approve: false });
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); renderAdmin(); }
+    catch (loadError) { $("adminMsg").textContent = "Task rejected, but refresh failed: " + loadError.message; }
+    return;
+  }
   const subs = getSubmissions();
   const sub = subs.find(s => s.id === subId);
   if (!sub) return;
@@ -534,7 +1010,14 @@ function rejectTask(subId) {
   renderAdmin();
 }
 
-function payWithdrawal(withdrawalId) {
+async function payWithdrawal(withdrawalId) {
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("review_withdrawal", { p_withdrawal_id: withdrawalId, p_decision: "paid" });
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); renderAdmin(); }
+    catch (loadError) { $("adminMsg").textContent = "Withdrawal updated, but refresh failed: " + loadError.message; }
+    return;
+  }
   const all = getWithdrawals();
   const w = all.find(x => x.id === withdrawalId);
   if (!w) return;
@@ -552,7 +1035,14 @@ function payWithdrawal(withdrawalId) {
   renderAdmin();
 }
 
-function rejectWithdrawal(withdrawalId) {
+async function rejectWithdrawal(withdrawalId) {
+  if (useSupabase) {
+    const { error } = await supabaseClient.rpc("review_withdrawal", { p_withdrawal_id: withdrawalId, p_decision: "rejected" });
+    if (error) { $("adminMsg").textContent = error.message; return; }
+    try { await refreshSupabaseData(); renderAdmin(); }
+    catch (loadError) { $("adminMsg").textContent = "Withdrawal updated, but refresh failed: " + loadError.message; }
+    return;
+  }
   const all = getWithdrawals();
   const w = all.find(x => x.id === withdrawalId);
   if (!w) return;
@@ -566,7 +1056,7 @@ function rejectWithdrawal(withdrawalId) {
 }
 
 /* ---------- 14. START THE APP ---------- */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initSupabase();
   document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
   $("loginBtn").addEventListener("click", () => showView("login"));
@@ -575,6 +1065,24 @@ document.addEventListener("DOMContentLoaded", () => {
   // If the link has ?ref=AME-XXXX, pre-fill it on the sign-up form.
   const ref = new URLSearchParams(location.search).get("ref");
   if (ref) $("signupReferral").value = ref;
-  refreshAuthUI();
-  showView("home");
+  if (useSupabase) {
+    currentUser = null;
+    sessionStorage.removeItem("ame_session");
+    refreshAuthUI();
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error || !data.session) { showView("home"); return; }
+    currentUser = { id: data.session.user.id };
+    try {
+      await refreshSupabaseData();
+      loginAs(currentUser);
+    } catch (loadError) {
+      currentUser = null;
+      refreshAuthUI();
+      console.error("Could not load Supabase app data:", loadError);
+      showView("home");
+    }
+  } else {
+    refreshAuthUI();
+    showView("home");
+  }
 });
