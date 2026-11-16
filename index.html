@@ -48,6 +48,10 @@
       </nav>
       <div class="auth-area">
         <span id="helloUser" class="hello"></span>
+        <span id="headerBalance" class="header-balance" style="display:none;">
+          <span>Balance</span>
+          <strong id="headerBalanceAmount">Rs 0</strong>
+        </span>
         <button id="loginBtn" class="btn btn-outline">Login</button>
         <button id="signupBtn" class="btn btn-primary">Create account</button>
         <button id="logoutBtn" class="btn btn-outline" style="display:none;">Logout</button>
@@ -60,19 +64,19 @@
     <!-- ===== HOME VIEW ===== -->
     <section id="view-home" class="view">
       <div class="hero">
-        <h1>Earn by helping channels grow</h1>
+        <h1>Earn by helping a TikTok profile grow</h1>
         <p>
           Choose an 80-day activity plan, then complete follow, like and comment tasks on
-          TikTok, YouTube, Instagram and Facebook.
-          A selected plan activates automatically when your simulated balance covers its price. Daily simulation rewards are credited only after all three tasks are approved;.
+          the TikTok profile @zoya.sheikh772.
+          A selected plan activates automatically when your simulated balance covers its price. Daily simulation rewards are credited only after all three tasks are approved.
         </p>
         <div class="hero-actions">
-          <button class="btn btn-primary btn-large" onclick="showView('signup')">Create free account</button>
+          <button class="btn btn-primary btn-large" onclick="showView('signup')">Create account</button>
           <button class="btn btn-outline btn-large" onclick="showView('tasks')">See today’s tasks</button>
           <a class="btn btn-outline btn-large" href="https://whatsapp.com/channel/0029VaZFn9DJuyAIpnGAb01m" target="_blank" rel="noopener">Join our WhatsApp channel</a>
         </div>
-        <p class="simulation-note"><strong>Admins whatsapp:</strong> 03255597318 .</p>
-        <p class="hero-note">Demo mode: accounts are saved in this browser only until Supabase is set up. See README.md.</p>
+        <p class="simulation-note"><strong>Admins whatsapp:</strong> 03464079475 .</p>
+        <p class="hero-note"> mode: accounts are saved in this browser only until Supabase is set up. See README.md.</p>
       </div>
 
       <div class="cards">
@@ -96,16 +100,6 @@
           <h3>5. Withdraw — no minimum</h3>
           <p>Give your phone number and bank account. The admin sends the money manually and marks it paid.</p>
         </div>
-        <div class="card">
-          <h3>Our channels</h3>
-          <ul class="channel-list">
-            <li>🎵 TikTok — <a href="https://www.tiktok.com/@totabhai326?_r=1&amp;_t=ZS-9BOKPxsHV7R" target="_blank" rel="noopener">@totabhai326</a></li>
-            <li>🎵 TikTok — <a href="https://www.tiktok.com/@abdulrehman65357?_r=1&amp;_t=ZS-9BOKW7PBZcS" target="_blank" rel="noopener">@abdulrehman65357</a></li>
-            <li>▶️ YouTube — <a href="https://www.youtube.com/@dougvargo_" target="_blank" rel="noopener">@dougvargo_</a></li>
-            <li>📸 Instagram — <a href="https://www.instagram.com/mr_abdulrehman_150?vrfl=eDM0M2FkcjFubWM2" target="_blank" rel="noopener">@mr_abdulrehman_150</a></li>
-            <li>👍 Facebook — <a href="https://www.facebook.com/share/1LxQBJLsBL/" target="_blank" rel="noopener">Facebook channel</a></li>
-          </ul>
-        </div>
       </div>
     </section>
 
@@ -113,7 +107,7 @@
     <section id="view-signup" class="view" style="display:none;">
       <div class="form-card">
         <h2>Create account — free</h2>
-        <p class="muted">Account creation is free. This demo does not process plan payments.</p>
+        <p class="muted">Account creation is free.</p>
         <label>Full name <input id="signupName" type="text" placeholder="Your name" /></label>
         <label>Email <input id="signupEmail" type="email" placeholder="you@example.com" /></label>
         <label>Password <input id="signupPassword" type="password" placeholder="Choose a password" /></label>
@@ -141,6 +135,15 @@
       <h2>Your tasks</h2>
       <div id="taskAccessNotice" class="access-notice" style="display:none;"></div>
       <div id="taskWorkspace" style="display:none;">
+      <div class="task-profile">
+        <div class="task-profile-mark" aria-hidden="true">TT</div>
+        <div class="task-profile-copy">
+          <span>Task profile</span>
+          <strong>@zoya.sheikh772</strong>
+          <small>All tasks open this TikTok profile.</small>
+        </div>
+        <a class="btn btn-primary" href="https://www.tiktok.com/@zoya.sheikh772?_r=1&_t=ZS-9BSEi9RJtDR" target="_blank" rel="noopener">Open TikTok profile</a>
+      </div>
       <div class="task-toolbar">
         <p class="muted">Complete all three tasks for the day. The plan’s simulated daily reward is credited after all three are approved.</p>
         <label class="task-day-picker">Day
@@ -165,7 +168,7 @@
     <section id="view-plans" class="view" style="display:none;">
       <h2>80-day activity plans</h2>
       <p class="simulation-note"><strong>important note:</strong> add money to your account to activate plans.</p>
-      <p class="muted">Choose a plan below. It activates automatically when your simulated balance covers its price, which is deducted at activation. The listed daily reward is credited only after all three tasks are approved.</p>
+      <p class="muted">Choose a plan below. It activates automatically when your balance covers its price, which is deducted at activation. The listed daily reward is credited only after all three tasks are approved.</p>
       <p id="plansStatus" class="plan-status"></p>
       <div id="plansList" class="plans-grid"></div>
       <p id="plansMsg" class="muted"></p>
@@ -186,7 +189,13 @@
     <!-- ===== DEMO DEPOSIT VIEW ===== -->
     <section id="view-deposit" class="view" style="display:none;">
       <h2>Deposit  balance</h2>
-      <p class="simulation-note"><strong>important insturction</strong> to get deposit in your acc send money to this account.<strong><li> accnumber : 76010110848010 </li>.<li> acc name : muhammad bilal</li>.<li> bank name : mezan bank</li></strong>.send screeshot to admin on whatsapp 03255597318.</p>
+      <p class="simulation-note"><strong>important insturction</strong> to get deposit in your acc send money to this account.</p>
+      <ul class="simulation-note">
+        <li>accnumber : <span id="depositAccountNumber">76010110848010</span> <button class="btn btn-outline" onclick="copyDepositAccountNumber()">Copy account number</button></li>
+        <li>acc name : muhammad bilal</li>
+        <li>bank name : mezan bank</li>
+      </ul>
+      <h4>send screeshot to admin on whatsapp 03464079475.</h4>
       <div class="form-card">
         <p><strong>Current simulated balance:</strong> <span id="depositBalance">Rs 0</span></p>
         <label for="depositAmount">Amount to add (Rs)</label>
@@ -258,10 +267,11 @@
           <p id="settingsMsg" class="msg"></p>
         </div>
 
+        <button id="refreshAdminRequestsBtn" class="btn btn-outline" onclick="refreshAdminRequests()">Refresh pending approvals</button>
         <h3>Pending task submissions</h3>
         <ul id="adminTasks" class="history"></ul>
 
-        <h3>Pending demo balance requests</h3>
+        <h3>Pending balance requests</h3>
         <p class="muted">Accepting a request adds fictional balance only. No payment is received or verified.</p>
         <ul id="adminDeposits" class="history"></ul>
 
@@ -278,7 +288,7 @@
 
   <footer class="footer">
     <div class="container">
-      <p>Al-Madina Earnings — school project simulation. Balances and rewards are fictional; no real money is paid.</p>
+      <p>Al-Madina Earnings — .balance will be added after admins approvel. and deposit will also be given after admins approval</p>
     </div>
   </footer>
 

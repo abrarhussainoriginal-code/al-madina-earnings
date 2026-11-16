@@ -75,12 +75,10 @@ REFERRAL_PERCENT: 5,
   fictional daily rewards listed in `PLANS`; all three tasks must be approved.
 
 **Channels + task plan**
-- `CHANNELS` contains the current five channels:
-  TikTok `@totabhai326`, TikTok `@abdulrehman65357`,
-  YouTube `@dougvargo_`, Instagram `@mr_abdulrehman_150`,
-  and the Facebook share link.
+- All 80-day tasks use the TikTok profile `@zoya.sheikh772`.
 - `generateTasks()` makes 80 days × 3 tasks = 240 tasks, rotating
-  channels so no day repeats the same channel 3 times.
+  Follow, Like, and Comment actions on that profile.
+- Re-run `supabase.sql` in Supabase to update the stored task catalog too.
 - Day 1 opens when a plan is activated; each following task day unlocks
   24 hours later. Existing active plans use their expiry to infer the start.
 - New plan rewards are fictional classroom-simulation amounts and are credited

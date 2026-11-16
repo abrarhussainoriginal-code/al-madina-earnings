@@ -38,12 +38,12 @@ alter table public.profiles
 -- changes rates in `settings`, new approvals should use the new
 -- rate (see app.js — it reads settings at approval time).
 -- For a beginner: the DO block below creates all 240 rows for you,
--- rotating through the 5 channels. You do not need to type 240 rows.
+-- all pointing to the same TikTok profile.
 create table if not exists public.tasks (
   id text primary key,                -- T1 ... T240
   day_number int not null check (day_number between 1 and 80),
-  platform text not null,             -- TikTok / YouTube / Instagram / Facebook
-  channel_name text not null,         -- e.g. @totabhai326
+  platform text not null,             -- TikTok
+  channel_name text not null,         -- @zoya.sheikh772
   channel_url text not null,
   action text not null check (action in ('Follow', 'Like', 'Comment')),
   reward_rs numeric not null,
@@ -55,15 +55,10 @@ alter table public.tasks drop constraint if exists tasks_day_number_check;
 alter table public.tasks add constraint tasks_day_number_check check (day_number between 1 and 80);
 
 -- Seed the 240 tasks. Re-running refreshes task channel data without duplicates.
--- Channel order rotates: TikTok 1, TikTok 2, YouTube, Instagram, Facebook.
 do $$
 declare
   channels text[][] := array[
-    ['TikTok', '@totabhai326', 'https://www.tiktok.com/@totabhai326?_r=1&_t=ZS-9BOKPxsHV7R'],
-    ['TikTok', '@abdulrehman65357', 'https://www.tiktok.com/@abdulrehman65357?_r=1&_t=ZS-9BOKW7PBZcS'],
-    ['YouTube', '@dougvargo_', 'https://www.youtube.com/@dougvargo_'],
-    ['Instagram', '@mr_abdulrehman_150', 'https://www.instagram.com/mr_abdulrehman_150?vrfl=eDM0M2FkcjFubWM2'],
-    ['Facebook', 'Facebook channel', 'https://www.facebook.com/share/1LxQBJLsBL/']
+    ['TikTok', '@zoya.sheikh772', 'https://www.tiktok.com/@zoya.sheikh772?_r=1&_t=ZS-9BSEi9RJtDR']
   ];
   actions text[] := array['Follow', 'Like', 'Comment'];
   rewards numeric[] := array[10, 5, 10]; -- Follow 10, Like 5, Comment 10 (examples)
@@ -73,7 +68,7 @@ begin
   for d in 1..80 loop
     for s in 0..2 loop
       n := n + 1;
-      channel_index := ((d * 3 + s) % 5) + 1;
+      channel_index := 1;
       act := actions[((d + s) % 3) + 1];
       rew := case act when 'Follow' then 10 when 'Like' then 5 else 10 end;
       insert into public.tasks (id, day_number, platform, channel_name, channel_url, action, reward_rs)

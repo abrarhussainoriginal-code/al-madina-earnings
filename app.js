@@ -51,23 +51,18 @@ function findPlan(planId) {
   return PLANS.find(plan => plan.id === planId) || LEGACY_PLANS.find(plan => plan.id === planId) || null;
 }
 
-/* ---------- 3. THE FIVE CHANNELS (exact links given by the owner) ---------- */
-const YOUTUBE_CHANNEL = { name: "@dougvargo_", url: "https://www.youtube.com/@dougvargo_" };
-const CHANNELS = [
-  { platform: "TikTok",    name: "@totabhai326",         url: "https://www.tiktok.com/@totabhai326?_r=1&_t=ZS-9BOKPxsHV7R" },
-  { platform: "TikTok",    name: "@abdulrehman65357",    url: "https://www.tiktok.com/@abdulrehman65357?_r=1&_t=ZS-9BOKW7PBZcS" },
-  { platform: "YouTube",   ...YOUTUBE_CHANNEL },
-  { platform: "Instagram", name: "@mr_abdulrehman_150", url: "https://www.instagram.com/mr_abdulrehman_150?vrfl=eDM0M2FkcjFubWM2" },
-  { platform: "Facebook",  name: "Facebook channel",     url: "https://www.facebook.com/share/1LxQBJLsBL/" }
-];
+/* ---------- 3. TASK PROFILE ---------- */
+const TASK_PROFILE = {
+  platform: "TikTok",
+  name: "@zoya.sheikh772",
+  url: "https://www.tiktok.com/@zoya.sheikh772?_r=1&_t=ZS-9BSEi9RJtDR"
+};
+const CHANNELS = [TASK_PROFILE];
 
 // The three actions rotate. Every task is one of these.
 const ACTIONS = ["Follow", "Like", "Comment"];
 
-/* ---------- 4. TASK PLAN — 80 days × 3 tasks, rotating channels ----------
-  Three consecutive channels are selected each day, rotating through all five.
-   That way no day repeats the same channel three times, and over
-  80 days every channel appears many times.
+/* ---------- 4. TASK PLAN — 80 days × 3 tasks, one TikTok profile ----------
    Reward comes from CONFIG.REWARDS, so changing it in Admin
    changes what future approvals pay. */
 function generateTasks() {
@@ -155,9 +150,10 @@ async function refreshSupabaseData() {
     }));
   }
   ALL_TASKS = tasks.data.map(task => ({
-    id: task.id, day: task.day_number, platform: task.platform,
-    channel: task.platform === "YouTube" ? YOUTUBE_CHANNEL.name : task.channel_name,
-    url: task.platform === "YouTube" ? YOUTUBE_CHANNEL.url : task.channel_url,
+    id: task.id, day: task.day_number,
+    channel: TASK_PROFILE.name,
+    platform: TASK_PROFILE.platform,
+    url: TASK_PROFILE.url,
     action: task.action, reward: Number(task.reward_rs)
   }));
   const taskById = new Map(ALL_TASKS.map(task => [task.id, task]));
@@ -192,6 +188,7 @@ async function refreshSupabaseData() {
   }
   currentUser = remoteCache.users.find(user => user.id === currentUser.id) || currentUser;
   sessionStorage.setItem("ame_session", JSON.stringify(currentUser));
+  updateStats();
 }
 
 /* ---------- 5. LOCAL STORAGE (demo mode) ----------
@@ -255,9 +252,11 @@ async function showView(name) {
   const el = $("view-" + name);
   if (el) el.style.display = "block";
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  let refreshError = null;
   if (useSupabase && currentUser) {
     try { await refreshSupabaseData(); }
     catch (error) {
+      refreshError = error;
       const message = $("adminMsg");
       if (message) message.textContent = "Could not refresh shared data: " + error.message;
       console.error("Could not refresh Supabase app data:", error);
@@ -270,6 +269,9 @@ async function showView(name) {
   if (name === "deposit") renderDeposit();
   if (name === "withdraw") renderWithdraw();
   if (name === "admin") renderAdmin();
+  if (name === "admin" && currentUser?.isAdmin && refreshError) {
+    $("adminMsg").textContent = "Could not refresh shared data: " + refreshError.message;
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -355,7 +357,7 @@ function loginAs(user) {
   currentUser = user;
   sessionStorage.setItem("ame_session", JSON.stringify(user));
   refreshAuthUI();
-  showView("tasks");
+  showView("plans");
 }
 
 function logout() {
@@ -372,6 +374,7 @@ function refreshAuthUI() {
   $("signupBtn").style.display = loggedIn ? "none" : "";
   $("logoutBtn").style.display = loggedIn ? "" : "none";
   $("helloUser").textContent = loggedIn ? ("Hi, " + currentUser.name) : "";
+  $("headerBalance").style.display = loggedIn ? "" : "none";
   // In local demo mode, let the first user reach the claim-admin screen.
   const canClaimFirstAdmin = loggedIn && (useSupabase
     ? remoteCache.adminExists === false
@@ -385,6 +388,7 @@ function updateStats() {
   const fresh = getUsers().find(u => u.id === currentUser.id) || currentUser;
   currentUser = fresh;
   const approved = getSubmissions().filter(s => s.userId === fresh.id && s.status === "approved").length;
+  if ($("headerBalanceAmount")) $("headerBalanceAmount").textContent = rs(fresh.balance);
   if ($("statBalance")) $("statBalance").textContent = rs(fresh.balance);
   if ($("statTaskEarnings")) $("statTaskEarnings").textContent = rs(fresh.taskEarnings);
   if ($("statRefEarnings")) $("statRefEarnings").textContent = rs(fresh.referralEarnings);
@@ -468,7 +472,7 @@ function renderTasks() {
           : "<span class='reward'>" + rs(reward) + "</span> after approval") + "</p>" +
       "</div>" +
       "<div class='task-card-actions'>" +
-        "<a class='btn btn-outline btn-small' href='" + task.url + "' target='_blank' rel='noopener'>Open channel</a> " +
+        "<a class='btn btn-outline btn-small' href='" + task.url + "' target='_blank' rel='noopener'>Open TikTok</a> " +
         (sub
           ? "<span class='badge " + sub.status + "'>" + sub.status.toUpperCase() + "</span>"
           : "<button class='btn btn-primary btn-small' onclick=\"submitTask('" + task.id + "')\">Mark done</button>") +
@@ -623,6 +627,7 @@ function requestPlan(planId) {
     ? "Plan activated automatically. Its fictional price was deducted from your balance."
     : "Plan selected. It will activate automatically when your balance reaches " + rs(findPlan(planId).amount) + ".";
   renderPlans();
+  updateStats();
 }
 
 /* ---------- 10. WALLET ---------- */
@@ -701,6 +706,33 @@ function copyReferralLink() {
   copyReferralValue("myReferralLink", "Referral link");
 }
 
+async function copyDepositAccountNumber() {
+  const accountNumber = $("depositAccountNumber").textContent.trim();
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(accountNumber);
+      alert("Account number copied.");
+      return;
+    } catch (error) {
+      console.error("Clipboard access failed; trying the browser copy fallback:", error);
+    }
+  }
+  const input = document.createElement("textarea");
+  input.value = accountNumber;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  if (!copied) {
+    alert("Could not copy account number. Please copy it manually.");
+    return;
+  }
+  alert("Account number copied.");
+}
+
 /* ---------- DEMO DEPOSITS ---------- */
 function renderDeposit() {
   if (!currentUser) { showView("login"); return; }
@@ -722,14 +754,14 @@ async function requestDemoDeposit() {
   }
   const requests = getDepositRequests();
   if (requests.some(request => request.userId === currentUser.id && request.status === "pending")) {
-    message.textContent = "You already have a pending demo balance request.";
+    message.textContent = "You already have a pending balance request.";
     return;
   }
   if (useSupabase) {
     const { error } = await supabaseClient.rpc("request_demo_balance", { p_amount: amount });
     if (error) { message.textContent = error.message; return; }
     $("depositAmount").value = "";
-    message.textContent = "Demo balance request sent to the admin for review.";
+    message.textContent = "Balance request sent to the admin for review.";
     try { await refreshSupabaseData(); renderDeposit(); }
     catch (loadError) { message.textContent = "Request sent, but refresh failed: " + loadError.message; }
     return;
@@ -767,6 +799,7 @@ async function approveDemoDeposit(requestId) {
   saveUsers(users);
   saveDepositRequests(requests);
   renderAdmin();
+  updateStats();
   if (currentUser.id === user.id) renderDeposit();
 }
 
@@ -847,6 +880,23 @@ async function handleWithdraw() {
    RULE: the FIRST user can claim admin only if no admin exists yet.
    After that, only an existing admin can promote someone else.
    This stops a stranger from making themselves admin later. */
+async function refreshAdminRequests() {
+  const button = $("refreshAdminRequestsBtn");
+  button.disabled = true;
+  button.textContent = "Refreshing...";
+  try {
+    if (useSupabase) await refreshSupabaseData();
+    renderAdmin();
+    if (currentUser?.isAdmin) $("adminMsg").textContent = "Pending approvals refreshed.";
+  } catch (error) {
+    $("adminMsg").textContent = "Could not refresh pending approvals: " + error.message;
+    console.error("Could not refresh admin approvals:", error);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Refresh pending approvals";
+  }
+}
+
 function renderAdmin() {
   if (!currentUser) { showView("login"); return; }
   const users = getUsers();
@@ -1084,6 +1134,7 @@ async function rejectWithdrawal(withdrawalId) {
   const u = users.find(x => x.id === w.userId);
   if (u) { u.balance += w.amount; saveUsers(users); }
   renderAdmin();
+  updateStats();
 }
 
 /* ---------- 14. START THE APP ---------- */

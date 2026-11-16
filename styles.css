@@ -55,6 +55,14 @@ body {
 
 .auth-area { display: flex; gap: 8px; align-items: center; }
 .hello { font-size: 14px; font-weight: 600; }
+.header-balance {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px 12px; border: 1px solid var(--border);
+  border-radius: 999px; background: var(--green-light);
+  line-height: 1.15; white-space: nowrap;
+}
+.header-balance span { color: var(--muted); font-size: 10px; font-weight: 700; }
+.header-balance strong { color: var(--green-dark); font-size: 13px; }
 
 /* ---------- Buttons, forms ---------- */
 .btn {
@@ -137,6 +145,25 @@ input:focus, select:focus { outline: 2px solid var(--green); border-color: var(-
 .task-unlock-notice { margin: -8px 0 16px; color: var(--muted); font-size: 13px; text-align: right; }
 .task-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .task-list { display: grid; gap: 10px; margin: 18px 0; }
+.task-profile {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px; margin: 18px 0;
+  border: 1px solid var(--border); border-left: 4px solid var(--green);
+  border-radius: var(--radius);
+  background: linear-gradient(110deg, var(--green-light), #fff);
+}
+.task-profile-mark {
+  display: grid; place-items: center; flex: 0 0 48px; height: 48px;
+  border-radius: 14px; background: var(--green); color: #fff;
+  font-size: 15px; font-weight: 800;
+}
+.task-profile-copy { display: grid; flex: 1; gap: 2px; }
+.task-profile-copy > span {
+  color: var(--muted); font-size: 11px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.task-profile-copy strong { color: var(--green-dark); font-size: 17px; }
+.task-profile-copy small { color: var(--muted); }
 .plans-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -165,14 +192,23 @@ input:focus, select:focus { outline: 2px solid var(--green); border-color: var(-
 .access-notice p { margin: 0 0 10px; }
 .task-card {
   background: #fff; border: 1px solid var(--border);
-  border-left: 3px solid var(--green); border-radius: 8px; padding: 16px 18px;
+  border-left: 3px solid var(--green); border-radius: var(--radius); padding: 16px 18px;
   display: flex; gap: 20px; flex-wrap: wrap;
   align-items: center; justify-content: space-between;
+  box-shadow: 0 3px 12px rgba(26, 43, 34, 0.045);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.task-card:hover {
+  border-color: #b6d7c1;
+  box-shadow: 0 8px 20px rgba(26, 43, 34, 0.08);
+  transform: translateY(-1px);
 }
 .task-card-content { flex: 1 1 260px; min-width: 0; }
 .task-card .task-platform {
-  margin: 0 0 3px; color: var(--green-dark); font-size: 12px;
-  font-weight: 800; text-transform: uppercase;
+  display: inline-flex; margin: 0 0 6px; padding: 3px 9px;
+  border-radius: 999px; background: var(--green-light);
+  color: var(--green-dark); font-size: 11px;
+  font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
 }
 .task-card h3 { margin: 0 0 5px; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
 .task-card h3 span { font-weight: 600; }
@@ -210,6 +246,8 @@ input:focus, select:focus { outline: 2px solid var(--green); border-color: var(-
   .task-toolbar { align-items: stretch; flex-direction: column; gap: 12px; }
   .task-day-picker { flex-basis: auto; width: 100%; }
   .task-unlock-notice { margin: -4px 0 14px; text-align: left; }
+  .task-profile { align-items: flex-start; flex-wrap: wrap; }
+  .task-profile .btn { width: 100%; text-align: center; }
   .task-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-card { align-items: flex-start; }
   .task-card-actions { width: 100%; }
