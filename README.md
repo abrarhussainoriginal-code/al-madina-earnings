@@ -30,6 +30,7 @@ The top menu switches views: Home, Tasks, Plans, Wallet, Referrals, Withdraw, Ad
 
 - **Home** explains the deal and lists the 5 channels.
 - **Sign up** asks for name, email, password, and an optional referral code.
+  Referral links prefill the code automatically.
 - **Login** asks for email + password.
 - **Plans** offers these 80-day classroom-simulation tiers:
   Rs 390 (Rs 60/day), Rs 870 (Rs 145/day), Rs 1,890 (Rs 315/day),
@@ -45,7 +46,8 @@ The top menu switches views: Home, Tasks, Plans, Wallet, Referrals, Withdraw, Ad
 - **Deposit** submits a fictional balance request for admin accept/reject review.
   Accepting adds simulated balance only; no real payment is processed. These
   requests are stored in the current browser and are not shared across devices.
-- **Referrals** shows your code, how many friends joined, and earnings.
+- **Referrals** provides a shareable signup link and code, and shows how many
+  friends joined and earnings.
 - **Withdraw** asks for amount, phone number, and bank account.
 - **Admin** is hidden unless you are an admin.
 
@@ -75,7 +77,7 @@ REFERRAL_PERCENT: 5,
 **Channels + task plan**
 - `CHANNELS` contains the current five channels:
   TikTok `@totabhai326`, TikTok `@abdulrehman65357`,
-  YouTube `@oyeah-b8m`, Instagram `@mr_abdulrehman_150`,
+  YouTube `@dougvargo_`, Instagram `@mr_abdulrehman_150`,
   and the Facebook share link.
 - `generateTasks()` makes 80 days × 3 tasks = 240 tasks, rotating
   channels so no day repeats the same channel 3 times.

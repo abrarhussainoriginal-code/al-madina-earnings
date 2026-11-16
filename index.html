@@ -33,7 +33,7 @@
         <span class="logo-mark">🕌</span>
         <div>
           <strong>Al-Madina Earnings</strong>
-          <small>Free to join • School project simulation</small>
+          <small>Free to join • do tasks earn money</small>
         </div>
       </div>
       <nav class="nav" id="mainNav">
@@ -90,7 +90,7 @@
         </div>
         <div class="card">
           <h3>4. Invite friends</h3>
-          <p>Share your referral code. Referral bonuses are based on approved task earnings.</p>
+          <p>Share your referral link; it automatically applies your code when a friend signs up. Referral bonuses are based on approved task earnings.</p>
         </div>
         <div class="card">
           <h3>5. Withdraw — no minimum</h3>
@@ -101,7 +101,7 @@
           <ul class="channel-list">
             <li>🎵 TikTok — <a href="https://www.tiktok.com/@totabhai326?_r=1&amp;_t=ZS-9BOKPxsHV7R" target="_blank" rel="noopener">@totabhai326</a></li>
             <li>🎵 TikTok — <a href="https://www.tiktok.com/@abdulrehman65357?_r=1&amp;_t=ZS-9BOKW7PBZcS" target="_blank" rel="noopener">@abdulrehman65357</a></li>
-            <li>▶️ YouTube — <a href="https://youtube.com/@oyeah-b8m?si=CM3ErIiYUYRVJiOM" target="_blank" rel="noopener">@oyeah-b8m</a></li>
+            <li>▶️ YouTube — <a href="https://www.youtube.com/@dougvargo_" target="_blank" rel="noopener">@dougvargo_</a></li>
             <li>📸 Instagram — <a href="https://www.instagram.com/mr_abdulrehman_150?vrfl=eDM0M2FkcjFubWM2" target="_blank" rel="noopener">@mr_abdulrehman_150</a></li>
             <li>👍 Facebook — <a href="https://www.facebook.com/share/1LxQBJLsBL/" target="_blank" rel="noopener">Facebook channel</a></li>
           </ul>
@@ -203,12 +203,18 @@
       <h2>Referrals — earn 5%</h2>
       <p>You earn <strong>5% of your referred friends’ approved task rewards</strong>.</p>
       <div class="form-card">
-        <label>Your referral code</label>
+        <label>Your referral link</label>
+        <div class="copy-row">
+          <input id="myReferralLink" readonly />
+          <button class="btn btn-outline" onclick="copyReferralLink()">Copy link</button>
+        </div>
+        <p class="muted">Send this link to a friend. Their signup form will automatically include your referral code.</p>
+        <label>Your referral code (manual entry)</label>
         <div class="copy-row">
           <input id="myReferralCode" readonly />
-          <button class="btn btn-outline" onclick="copyReferral()">Copy</button>
+          <button class="btn btn-outline" onclick="copyReferral()">Copy code</button>
         </div>
-        <p class="muted">Share this code. When a friend signs up with it, they are linked to you.</p>
+        <p class="muted">Friends can also enter this code manually during signup.</p>
         <p><strong>Friends referred:</strong> <span id="refCount">0</span> &nbsp;•&nbsp; <strong>Referral earnings:</strong> <span id="refEarnings">Rs 0</span></p>
       </div>
       <h3>Your referred friends</h3>

@@ -52,10 +52,11 @@ function findPlan(planId) {
 }
 
 /* ---------- 3. THE FIVE CHANNELS (exact links given by the owner) ---------- */
+const YOUTUBE_CHANNEL = { name: "@dougvargo_", url: "https://www.youtube.com/@dougvargo_" };
 const CHANNELS = [
   { platform: "TikTok",    name: "@totabhai326",         url: "https://www.tiktok.com/@totabhai326?_r=1&_t=ZS-9BOKPxsHV7R" },
   { platform: "TikTok",    name: "@abdulrehman65357",    url: "https://www.tiktok.com/@abdulrehman65357?_r=1&_t=ZS-9BOKW7PBZcS" },
-  { platform: "YouTube",   name: "@oyeah-b8m",            url: "https://youtube.com/@oyeah-b8m?si=CM3ErIiYUYRVJiOM" },
+  { platform: "YouTube",   ...YOUTUBE_CHANNEL },
   { platform: "Instagram", name: "@mr_abdulrehman_150", url: "https://www.instagram.com/mr_abdulrehman_150?vrfl=eDM0M2FkcjFubWM2" },
   { platform: "Facebook",  name: "Facebook channel",     url: "https://www.facebook.com/share/1LxQBJLsBL/" }
 ];
@@ -155,7 +156,9 @@ async function refreshSupabaseData() {
   }
   ALL_TASKS = tasks.data.map(task => ({
     id: task.id, day: task.day_number, platform: task.platform,
-    channel: task.channel_name, url: task.channel_url, action: task.action, reward: Number(task.reward_rs)
+    channel: task.platform === "YouTube" ? YOUTUBE_CHANNEL.name : task.channel_name,
+    url: task.platform === "YouTube" ? YOUTUBE_CHANNEL.url : task.channel_url,
+    action: task.action, reward: Number(task.reward_rs)
   }));
   const taskById = new Map(ALL_TASKS.map(task => [task.id, task]));
   const userById = new Map(remoteCache.users.map(user => [user.id, user]));
@@ -651,11 +654,13 @@ function renderReferrals() {
     });
     const user = getUsers().find(item => item.id === currentUser.id) || currentUser;
     $("myReferralCode").value = user.referralCode || "";
+    $("myReferralLink").value = user.referralCode ? makeReferralLink(user.referralCode) : "";
     $("refEarnings").textContent = rs(user.referralEarnings);
     return;
   }
   const u = getUsers().find(x => x.id === currentUser.id) || currentUser;
   $("myReferralCode").value = u.referralCode || "";
+  $("myReferralLink").value = u.referralCode ? makeReferralLink(u.referralCode) : "";
   const friends = getUsers().filter(x => x.referredBy === u.id);
   $("refCount").textContent = friends.length;
   $("refEarnings").textContent = rs(u.referralEarnings);
@@ -663,11 +668,37 @@ function renderReferrals() {
     ? friends.map(f => "<li><span>" + esc(f.name) + " (" + esc(f.email) + ")</span><span>Task earnings: " + rs(f.taskEarnings) + "</span></li>").join("")
     : "<li>No friends joined with your code yet.</li>";
 }
-function copyReferral() {
-  const input = $("myReferralCode");
+function makeReferralLink(code) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("ref", code);
+  return url.toString();
+}
+async function copyReferralValue(inputId, label) {
+  const input = $(inputId);
+  input.focus();
   input.select();
-  navigator.clipboard?.writeText(input.value);
-  alert("Referral code copied: " + input.value);
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(input.value);
+      alert(label + " copied.");
+      return;
+    } catch (error) {
+      console.error("Clipboard access failed; trying the browser copy fallback:", error);
+    }
+  }
+  if (!document.execCommand("copy")) {
+    alert("Could not copy " + label.toLowerCase() + ". Please copy it manually.");
+    return;
+  }
+  alert(label + " copied.");
+}
+function copyReferral() {
+  copyReferralValue("myReferralCode", "Referral code");
+}
+function copyReferralLink() {
+  copyReferralValue("myReferralLink", "Referral link");
 }
 
 /* ---------- DEMO DEPOSITS ---------- */

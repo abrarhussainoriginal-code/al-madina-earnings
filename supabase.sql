@@ -61,7 +61,7 @@ declare
   channels text[][] := array[
     ['TikTok', '@totabhai326', 'https://www.tiktok.com/@totabhai326?_r=1&_t=ZS-9BOKPxsHV7R'],
     ['TikTok', '@abdulrehman65357', 'https://www.tiktok.com/@abdulrehman65357?_r=1&_t=ZS-9BOKW7PBZcS'],
-    ['YouTube', '@oyeah-b8m', 'https://youtube.com/@oyeah-b8m?si=CM3ErIiYUYRVJiOM'],
+    ['YouTube', '@dougvargo_', 'https://www.youtube.com/@dougvargo_'],
     ['Instagram', '@mr_abdulrehman_150', 'https://www.instagram.com/mr_abdulrehman_150?vrfl=eDM0M2FkcjFubWM2'],
     ['Facebook', 'Facebook channel', 'https://www.facebook.com/share/1LxQBJLsBL/']
   ];
