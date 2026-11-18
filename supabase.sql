@@ -83,8 +83,8 @@ end $$;
 
 -- ---------- 3. TASK SUBMISSIONS ----------
 -- One row every time a user presses "Mark done".
--- CONDITION: status starts as 'pending'. Money is paid ONLY
--- when an admin changes it to 'approved' (see the app logic).
+-- The submission is approved immediately and rewards are processed
+-- by submit_task in the same transaction.
 -- A user must not be paid twice for the same task:
 -- the unique key (user_id, task_id) blocks a second row.
 create table if not exists public.task_submissions (
@@ -150,8 +150,12 @@ create table if not exists public.plan_catalog (
   id text primary key,
   price_rs numeric not null check (price_rs > 0),
   daily_reward_rs numeric not null check (daily_reward_rs >= 0),
-  duration_days int not null check (duration_days > 0)
+  duration_days int not null check (duration_days > 0),
+  total_reward_rs numeric generated always as (daily_reward_rs * duration_days) stored
 );
+
+alter table public.plan_catalog
+  add column if not exists total_reward_rs numeric generated always as (daily_reward_rs * duration_days) stored;
 
 insert into public.plan_catalog (id, price_rs, daily_reward_rs, duration_days) values
   ('plan-390', 390, 60, 80),
@@ -378,49 +382,7 @@ begin
 end;
 $$;
 
-create or replace function public.submit_task(p_task_id text)
-returns uuid
-language plpgsql
-security definer
-set search_path = public, auth, pg_temp
-as $$
-declare
-  account public.profiles%rowtype;
-  task_row public.tasks%rowtype;
-  plan_days int;
-  task_reward numeric;
-  submission_id uuid;
-begin
-  if auth.uid() is null then raise exception 'Sign in required'; end if;
-  select * into account from public.profiles where id = auth.uid() for update;
-  if not found or account.active_plan_id is null or account.plan_expires_at is null or account.plan_expires_at <= now() then
-    raise exception 'An active plan is required';
-  end if;
-  select * into task_row from public.tasks where id = p_task_id;
-  if not found then raise exception 'Task not found'; end if;
-  select duration_days into plan_days from public.plan_catalog where id = account.active_plan_id;
-  if plan_days is null then plan_days := 30; end if;
-  if task_row.day_number > plan_days or task_row.day_number > floor(extract(epoch from (
-    now() - coalesce(account.plan_started_at, account.plan_expires_at - make_interval(days => plan_days))
-  )) / 86400) + 1 then
-    raise exception 'Task day is locked';
-  end if;
-
-  select case task_row.action
-    when 'Follow' then follow_rs when 'Like' then like_rs else comment_rs end
-  into task_reward from public.settings where id = 1;
-
-  if exists (select 1 from public.plan_catalog where id = account.active_plan_id) then
-    task_reward := 0;
-  end if;
-  insert into public.task_submissions (user_id, task_id, status, reward_rs)
-  values (auth.uid(), task_row.id, 'pending', coalesce(task_reward, task_row.reward_rs))
-  returning id into submission_id;
-  return submission_id;
-end;
-$$;
-
-create or replace function public.review_task(p_submission_id uuid, p_approve boolean)
+create or replace function public.complete_task_submission(p_submission_id uuid)
 returns void
 language plpgsql
 security definer
@@ -437,11 +399,9 @@ declare
   referrer_id uuid;
   referrer_reward numeric;
 begin
-  if not public.is_admin() then raise exception 'Admin access required'; end if;
   select * into submission from public.task_submissions where id = p_submission_id and status = 'pending' for update;
   if not found then raise exception 'Pending submission not found'; end if;
-  update public.task_submissions set status = case when p_approve then 'approved' else 'rejected' end where id = p_submission_id;
-  if not p_approve then return; end if;
+  update public.task_submissions set status = 'approved' where id = p_submission_id;
 
   select * into account from public.profiles where id = submission.user_id for update;
   select day_number into task_day from public.tasks where id = submission.task_id;
@@ -486,6 +446,70 @@ begin
     end if;
   end if;
   perform public.maybe_activate_selected_plan(account.id);
+end;
+$$;
+revoke all on function public.complete_task_submission(uuid) from public, anon, authenticated;
+
+create or replace function public.submit_task(p_task_id text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+declare
+  account public.profiles%rowtype;
+  task_row public.tasks%rowtype;
+  plan_days int;
+  task_reward numeric;
+  submission_id uuid;
+begin
+  if auth.uid() is null then raise exception 'Sign in required'; end if;
+  select * into account from public.profiles where id = auth.uid() for update;
+  if not found or account.active_plan_id is null or account.plan_expires_at is null or account.plan_expires_at <= now() then
+    raise exception 'An active plan is required';
+  end if;
+  select * into task_row from public.tasks where id = p_task_id;
+  if not found then raise exception 'Task not found'; end if;
+  select duration_days into plan_days from public.plan_catalog where id = account.active_plan_id;
+  if plan_days is null then plan_days := 30; end if;
+  if task_row.day_number > plan_days or task_row.day_number > floor(extract(epoch from (
+    now() - coalesce(account.plan_started_at, account.plan_expires_at - make_interval(days => plan_days))
+  )) / 86400) + 1 then
+    raise exception 'Task day is locked';
+  end if;
+
+  select case task_row.action
+    when 'Follow' then follow_rs when 'Like' then like_rs else comment_rs end
+  into task_reward from public.settings where id = 1;
+
+  if exists (select 1 from public.plan_catalog where id = account.active_plan_id) then
+    task_reward := 0;
+  end if;
+  insert into public.task_submissions (user_id, task_id, status, reward_rs)
+  values (auth.uid(), task_row.id, 'pending', coalesce(task_reward, task_row.reward_rs))
+  returning id into submission_id;
+  perform public.complete_task_submission(submission_id);
+  return submission_id;
+end;
+$$;
+
+create or replace function public.review_task(p_submission_id uuid, p_approve boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+declare
+  submission public.task_submissions%rowtype;
+begin
+  if not public.is_admin() then raise exception 'Admin access required'; end if;
+  select * into submission from public.task_submissions where id = p_submission_id and status = 'pending' for update;
+  if not found then raise exception 'Pending submission not found'; end if;
+  if p_approve then
+    perform public.complete_task_submission(p_submission_id);
+  else
+    update public.task_submissions set status = 'rejected' where id = p_submission_id;
+  end if;
 end;
 $$;
 

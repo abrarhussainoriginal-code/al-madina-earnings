@@ -178,8 +178,18 @@ input:focus, select:focus { outline: 2px solid var(--green); border-color: var(-
   padding: 18px;
 }
 .plan-card h3 { margin: 0; color: var(--green-dark); }
-.plan-duration { color: var(--muted); margin: 4px 0 16px; }
-.plan-card .plan-daily-reward { color: var(--green-dark); font-weight: 800; margin: -8px 0 16px; }
+.plan-duration { color: var(--muted); margin: 4px 0 8px; }
+.plan-card .plan-daily-reward { color: var(--green-dark); font-weight: 800; margin: 0 0 8px; }
+.plan-card .plan-total-reward {
+  margin: 12px 0 16px;
+  padding: 10px;
+  border-left: 4px solid var(--green);
+  border-radius: 4px;
+  background: var(--green-light);
+  color: var(--green-dark);
+  font-size: 15px;
+  font-weight: 800;
+}
 .plan-card .btn { width: 100%; }
 .plan-card .btn:disabled { background: #9aa79e; cursor: not-allowed; }
 .plan-status, .access-notice {

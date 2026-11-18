@@ -7,7 +7,7 @@
   1. Account creation is free. The app does not process deposits.
   2. A selected plan activates automatically when simulated balance covers its price.
   3. No guaranteed daily percent. No 20%, no 15%.
-  4. A user earns ONLY after an admin approves a task.
+  4. A task is approved automatically when the user marks it done.
   5. Referral = 5% of what referred friends earn from TASKS.
   6. Withdrawal has NO minimum (any amount above Rs 0).
       Admin pays manually and marks it paid.
@@ -135,7 +135,7 @@ async function refreshSupabaseData() {
     supabaseClient.from("balance_history").select("id,user_id,description,amount_rs,created_at"),
     supabaseClient.from("daily_task_payouts").select("user_id,plan_started_at,day_number"),
     supabaseClient.from("settings").select("follow_rs,like_rs,comment_rs,referral_percent").eq("id", 1).maybeSingle(),
-    supabaseClient.from("plan_catalog").select("id,price_rs,daily_reward_rs,duration_days").order("price_rs"),
+    supabaseClient.from("plan_catalog").select("*").order("price_rs"),
     supabaseClient.rpc("admin_exists")
   ]);
   const failed = [profiles, tasks, submissions, withdrawals, deposits, history, payouts, settings, plans, adminStatus].find(result => result.error);
@@ -146,7 +146,8 @@ async function refreshSupabaseData() {
   if (plans.data.length) {
     PLANS = plans.data.map(plan => ({
       id: plan.id, amount: Number(plan.price_rs),
-      dailyReward: Number(plan.daily_reward_rs), days: plan.duration_days
+      dailyReward: Number(plan.daily_reward_rs), days: plan.duration_days,
+      totalReward: plan.total_reward_rs == null ? undefined : Number(plan.total_reward_rs)
     }));
   }
   ALL_TASKS = tasks.data.map(task => ({
@@ -399,8 +400,7 @@ function updateStats() {
    CONDITION: you must be logged in to submit.
    CONDITION: one submission per task per user. Pressing "Mark done"
    twice does NOT pay twice — the second press is blocked.
-   CONDITION: submitting does NOT pay yet. Status = "pending".
-   Only an admin approval (section 12) adds money. */
+   Marking a task done approves it immediately. */
 function renderTasks() {
   const workspace = $("taskWorkspace");
   const notice = $("taskAccessNotice");
@@ -468,8 +468,8 @@ function renderTasks() {
         "<p class='task-platform'>" + esc(task.platform) + "</p>" +
         "<h3>" + esc(task.action) + " <span>— " + esc(task.channel) + "</span></h3>" +
         "<p class='task-details'>Day " + task.day + " • " + (activePlan.dailyReward
-          ? "Part of <span class='reward'>" + rs(activePlan.dailyReward) + " daily simulation reward</span>; all 3 tasks must be approved"
-          : "<span class='reward'>" + rs(reward) + "</span> after approval") + "</p>" +
+          ? "Part of <span class='reward'>" + rs(activePlan.dailyReward) + " daily simulation reward</span>; mark all 3 tasks done to earn"
+          : "<span class='reward'>" + rs(reward) + "</span> when marked done") + "</p>" +
       "</div>" +
       "<div class='task-card-actions'>" +
         "<a class='btn btn-outline btn-small' href='" + task.url + "' target='_blank' rel='noopener'>Open TikTok</a> " +
@@ -505,8 +505,8 @@ async function submitTask(taskId) {
     const { error } = await supabaseClient.rpc("submit_task", { p_task_id: task.id });
     if (error) { $("tasksMsg").textContent = error.message; return; }
     try { await refreshSupabaseData(); }
-    catch (loadError) { $("tasksMsg").textContent = "Task submitted, but refresh failed: " + loadError.message; return; }
-    $("tasksMsg").textContent = "Submitted for admin review.";
+    catch (loadError) { $("tasksMsg").textContent = "Task approved, but refresh failed: " + loadError.message; return; }
+    $("tasksMsg").textContent = "Task marked done and approved automatically.";
     renderTasks();
     return;
   }
@@ -519,7 +519,8 @@ async function submitTask(taskId) {
   };
   subs.push(sub);
   saveSubmissions(subs);
-  $("tasksMsg").textContent = "Submitted for approval. You will be paid only if an admin approves it.";
+  await approveTask(sub.id);
+  $("tasksMsg").textContent = "Task marked done and approved automatically.";
   renderTasks();
 }
 
@@ -583,9 +584,11 @@ function renderPlans() {
       const selected = currentUser?.planRequestId === plan.id;
       const disabled = !currentUser || !!activePlan || !!requestedPlan;
       const buttonText = activePlan ? "Plan active" : selected ? "Selected" : requestedPlan ? "Another plan selected" : "Choose plan";
+      const totalSimulatedReward = Number(plan.totalReward ?? (Number(plan.dailyReward) * Number(plan.days)));
       return "<article class='plan-card'><h3>" + rs(plan.amount) + " activity</h3>" +
         "<p class='plan-duration'>" + plan.days + " days</p>" +
         "<p class='plan-daily-reward'>Rs " + Number(plan.dailyReward).toLocaleString("en-PK") + " simulated daily reward</p>" +
+        "<p class='plan-total-reward'>Total simulated rewards: " + rs(totalSimulatedReward) + "</p>" +
         "<button class='btn btn-primary' " + (disabled ? "disabled" : "onclick=\"requestPlan('" + plan.id + "')\"") + ">" + buttonText + "</button></article>";
     }
   ).join("");
@@ -640,7 +643,7 @@ function renderWallet() {
   const history = getHistory().filter(h => h.userId === u.id).slice().reverse();
   $("walletHistory").innerHTML = history.length
     ? history.map(h => "<li><span>" + esc(h.text) + "</span><strong>" + rs(h.amount) + "</strong></li>").join("")
-    : "<li>No earnings yet. Complete a task and wait for admin approval.</li>";
+    : "<li>No earnings yet. Mark a task done to start earning.</li>";
 }
 
 /* ---------- 11. REFERRALS ----------

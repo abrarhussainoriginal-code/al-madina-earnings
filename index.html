@@ -10,7 +10,7 @@
     * Account creation is free; a selected plan activates when simulated balance covers its price.
     * This demo does not collect or verify payments.
     * No guaranteed daily percent (no 20%, no 15%).
-    * Simulated daily rewards are credited only after all three daily tasks are approved.
+    * Simulated daily rewards are credited after all three daily tasks are marked done.
     * Referral: 5% of what referred friends earn from tasks.
     * Withdrawal: no minimum. Admin pays manually.
 
@@ -68,7 +68,7 @@
         <p>
           Choose an 80-day activity plan, then complete follow, like and comment tasks on
           the TikTok profile @zoya.sheikh772.
-          A selected plan activates automatically when your simulated balance covers its price. Daily simulation rewards are credited only after all three tasks are approved.
+          A selected plan activates automatically when your simulated balance covers its price. Daily simulation rewards are credited after all three tasks are marked done.
         </p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-large" onclick="showView('signup')">Create account</button>
@@ -89,8 +89,8 @@
           <p>80 days of tasks. Follow, like or comment on the channels below. Open the channel, do the action, then press “Mark done”.</p>
         </div>
         <div class="card">
-          <h3>3. Admin approves, then you earn</h3>
-          <p>Your selected plan sets the simulated daily reward. It is credited only after all three tasks for that day are approved.</p>
+          <h3>3. Mark done, then you earn</h3>
+          <p>Tasks are approved automatically when marked done. Your selected plan’s simulated daily reward is credited after all three tasks for that day are done.</p>
         </div>
         <div class="card">
           <h3>4. Invite friends</h3>
@@ -168,7 +168,7 @@
     <section id="view-plans" class="view" style="display:none;">
       <h2>80-day activity plans</h2>
       <p class="simulation-note"><strong>important note:</strong> add money to your account to activate plans.</p>
-      <p class="muted">Choose a plan below. It activates automatically when your balance covers its price, which is deducted at activation. The listed daily reward is credited only after all three tasks are approved.</p>
+      <p class="muted">Choose a plan below. It activates automatically when your balance covers its price, which is deducted at activation. Total simulated rewards are calculated as daily reward × plan days. Rewards are fictional, not real earnings.</p>
       <p id="plansStatus" class="plan-status"></p>
       <div id="plansList" class="plans-grid"></div>
       <p id="plansMsg" class="muted"></p>
@@ -195,7 +195,7 @@
         <li>acc name : muhammad bilal</li>
         <li>bank name : mezan bank</li>
       </ul>
-      <h4>send screeshot to admin on whatsapp 03464079475.</h4>
+      <h4>send screeshot to admin on whatsapp <a href="https://wa.me/923464079475" target="_blank" rel="noopener noreferrer">03464079475</a>.</h4>
       <div class="form-card">
         <p><strong>Current simulated balance:</strong> <span id="depositBalance">Rs 0</span></p>
         <label for="depositAmount">Amount to add (Rs)</label>

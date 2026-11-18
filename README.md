@@ -37,11 +37,14 @@ The top menu switches views: Home, Tasks, Plans, Wallet, Referrals, Withdraw, Ad
   Rs 3,660 (Rs 610/day), Rs 7,260 (Rs 1,210/day), Rs 14,850 (Rs 2,475/day),
   Rs 32,820 (Rs 5,470/day), Rs 62,940 (Rs 10,490/day),
   Rs 136,560 (Rs 22,760/day), and Rs 280,830 (Rs 46,805/day).
-  A daily simulation reward is credited once after all three tasks for that
-  day are approved. Plans activate automatically when the fictional balance
-  covers their price; the price is deducted. The demo does not handle payments.
+  Tasks are approved automatically when marked done. A daily simulation reward
+  is credited once after all three tasks for that day are done. Plans activate
+  automatically when the fictional balance covers their price; the price is
+  deducted. Each plan shows total simulated rewards, calculated in Supabase as
+  `daily reward × plan days`. The demo does not handle payments.
 - **Tasks** stays locked without an active plan. Once activated, it
-  shows Day 1–80, 3 tasks a day, each with Open channel + Mark done.
+  shows Day 1–80, 3 tasks a day, each with Open channel + Mark done; marking
+  a task done approves it automatically.
 - **Wallet** shows balance, total earned, total withdrawn, and history.
 - **Deposit** submits a fictional balance request for admin accept/reject review.
   Accepting adds simulated balance only; no real payment is processed. These
@@ -72,27 +75,25 @@ REFERRAL_PERCENT: 5,
 - Leave the Supabase fields empty for local demo mode.
 - Fill them in only after you create a Supabase project (below).
 - These per-action rates apply only to legacy plans. New plans use the
-  fictional daily rewards listed in `PLANS`; all three tasks must be approved.
+  fictional daily rewards listed in `PLANS`; all three tasks must be marked done.
 
 **Channels + task plan**
 - All 80-day tasks use the TikTok profile `@zoya.sheikh772`.
 - `generateTasks()` makes 80 days × 3 tasks = 240 tasks, rotating
   Follow, Like, and Comment actions on that profile.
-- Re-run `supabase.sql` in Supabase to update the stored task catalog too.
+- Re-run `supabase.sql` in Supabase to update the stored task catalog and enable automatic task approval.
 - Day 1 opens when a plan is activated; each following task day unlocks
   24 hours later. Existing active plans use their expiry to infer the start.
-- New plan rewards are fictional classroom-simulation amounts and are credited
-  once per day only after all three tasks for that day are approved. No real
+  New plan rewards are fictional classroom-simulation amounts and are credited
+  once per day only after all three tasks for that day are marked done. No real
   money is paid by this project.
 
 **The key conditions — where the safety rules live:**
 
-1. **Task approval before simulated reward** — in `submitTask()` and `approveTask()`
-   - `submitTask()` only creates a row with `status: "pending"`.
-     It pays **nothing**.
-   - `approveTask()` is the **only** place a simulated reward is credited.
-     New-plan rewards are credited once per day, after all three approvals.
-   - `rejectTask()` pays nothing.
+1. **Automatic task approval and simulated rewards** — in `submitTask()` and `approveTask()`
+   - `submitTask()` approves the task immediately when the user marks it done.
+   - New-plan rewards are credited once per day, after all three tasks are done.
+   - Existing pending tasks can still be approved or rejected by an admin.
 
 2. **One submission per task** — in `submitTask()`
    - If a row already exists for that user + that task, the second
