@@ -5,7 +5,7 @@
 
   DEMO PLAN ACCESS — the rules baked into this code:
   1. Account creation is free. The app does not process deposits.
-  2. A selected plan activates automatically when simulated balance covers its price.
+  2. Each selected plan activates automatically when simulated balance covers its price.
   3. No guaranteed daily percent. No 20%, no 15%.
   4. A task is approved automatically when the user marks it done.
   5. Referral = 5% of what referred friends earn from TASKS.
@@ -27,7 +27,7 @@ const CONFIG = {
   // Referral bonus: percent of a referred friend's TASK earnings.
   REFERRAL_PERCENT: 5, // 5%
 
-  DAYS: 80,        // task plan lasts 80 days
+  DAYS: 80,        // shared task schedule lasts 80 days
   TASKS_PER_DAY: 3 // 3 tasks every day
 };
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -95,7 +95,7 @@ let ALL_TASKS = generateTasks();
 let supabaseClient = null;
 let useSupabase = false;
 const remoteCache = {
-  users: [], submissions: [], withdrawals: [], depositRequests: [],
+  users: [], planActivations: [], submissions: [], withdrawals: [], depositRequests: [],
   history: [], dailyTaskPayouts: [], settings: null, adminExists: null
 };
 const remoteCacheKeys = new Set([
@@ -118,6 +118,7 @@ function mapSupabaseProfile(row) {
     referralCode: row.referral_code, referredBy: row.referred_by,
     planRequestId: row.plan_request_id, activePlanId: row.active_plan_id,
     planStartedAt: row.plan_started_at, planExpiresAt: row.plan_expires_at,
+    planActivations: [],
     isAdmin: row.is_admin, balance: Number(row.balance_rs),
     taskEarnings: Number(row.task_earnings_rs), referralEarnings: Number(row.referral_earnings_rs),
     totalWithdrawn: Number(row.total_withdrawn_rs)
@@ -126,22 +127,30 @@ function mapSupabaseProfile(row) {
 
 async function refreshSupabaseData() {
   if (!useSupabase || !currentUser) return;
-  const [profiles, tasks, submissions, withdrawals, deposits, history, payouts, settings, plans, adminStatus] = await Promise.all([
+  const [profiles, activations, tasks, submissions, withdrawals, deposits, history, payouts, settings, plans, adminStatus] = await Promise.all([
     supabaseClient.from("profiles").select("*"),
+    supabaseClient.from("plan_activations").select("id,user_id,plan_id,started_at,expires_at"),
     supabaseClient.from("tasks").select("id,day_number,platform,channel_name,channel_url,action,reward_rs").order("day_number").order("id"),
     supabaseClient.from("task_submissions").select("id,user_id,task_id,status,reward_rs,created_at"),
     supabaseClient.from("withdrawals").select("id,user_id,amount_rs,phone,bank_account,status,created_at"),
     supabaseClient.from("demo_balance_requests").select("id,user_id,amount_rs,status,created_at"),
     supabaseClient.from("balance_history").select("id,user_id,description,amount_rs,created_at"),
-    supabaseClient.from("daily_task_payouts").select("user_id,plan_started_at,day_number"),
+    supabaseClient.from("daily_task_payouts").select("user_id,plan_started_at,plan_activation_id,day_number"),
     supabaseClient.from("settings").select("follow_rs,like_rs,comment_rs,referral_percent").eq("id", 1).maybeSingle(),
     supabaseClient.from("plan_catalog").select("*").order("price_rs"),
     supabaseClient.rpc("admin_exists")
   ]);
-  const failed = [profiles, tasks, submissions, withdrawals, deposits, history, payouts, settings, plans, adminStatus].find(result => result.error);
+  const failed = [profiles, activations, tasks, submissions, withdrawals, deposits, history, payouts, settings, plans, adminStatus].find(result => result.error);
   if (failed?.error) throw failed.error;
 
   remoteCache.users = profiles.data.map(mapSupabaseProfile);
+  remoteCache.planActivations = activations.data.map(row => ({
+    id: row.id, userId: row.user_id, planId: row.plan_id,
+    startedAt: row.started_at, expiresAt: row.expires_at
+  }));
+  remoteCache.users.forEach(user => {
+    user.planActivations = remoteCache.planActivations.filter(activation => activation.userId === user.id);
+  });
   remoteCache.adminExists = adminStatus.data;
   if (plans.data.length) {
     PLANS = plans.data.map(plan => ({
@@ -180,7 +189,9 @@ async function refreshSupabaseData() {
     id: row.id, userId: row.user_id, text: row.description,
     amount: Number(row.amount_rs), createdAt: row.created_at
   }));
-  remoteCache.dailyTaskPayouts = payouts.data.map(row => [row.user_id, row.plan_started_at, row.day_number].join(":"));
+  remoteCache.dailyTaskPayouts = payouts.data.map(row =>
+    [row.user_id, row.plan_activation_id || row.plan_started_at, row.day_number].join(":")
+  );
   if (settings.data) {
     remoteCache.settings = {
       rewards: { Follow: Number(settings.data.follow_rs), Like: Number(settings.data.like_rs), Comment: Number(settings.data.comment_rs) },
@@ -317,7 +328,8 @@ async function handleSignup() {
     passwordHash: demoHash(password), // demo only — see warning above
     referralCode: makeReferralCode(name),
     referredBy: referredBy,
-    planRequestId: null, activePlanId: null, planExpiresAt: null,
+    planRequestId: null, activePlanId: null, planStartedAt: null, planExpiresAt: null,
+    planActivations: [],
     isAdmin: false,
     balance: 0, taskEarnings: 0, referralEarnings: 0, totalWithdrawn: 0,
     createdAt: new Date().toISOString()
@@ -404,23 +416,24 @@ function updateStats() {
 function renderTasks() {
   const workspace = $("taskWorkspace");
   const notice = $("taskAccessNotice");
-  const activePlan = getActivePlan(currentUser);
-  if (!activePlan) {
+  const activePlans = getActivePlans(currentUser);
+  if (!activePlans.length) {
     workspace.style.display = "none";
     notice.style.display = "block";
     notice.innerHTML = currentUser
-      ? "<p>Choose an 80-day plan. It activates automatically when your simulated balance covers its price.</p><button class='btn btn-primary' onclick=\"showView('plans')\">View plans</button>"
+      ? "<p>Choose an 80-day plan. Each plan activates when your simulated balance covers its price.</p><button class='btn btn-primary' onclick=\"showView('plans')\">View plans</button>"
       : "<p>Log in and get an active plan to access tasks.</p><button class='btn btn-primary' onclick=\"showView('login')\">Login</button>";
     return;
   }
   notice.style.display = "none";
   workspace.style.display = "block";
-  const unlockedDay = getUnlockedTaskDay(currentUser, activePlan);
+  const taskDays = getTaskScheduleDays(currentUser);
+  const unlockedDay = getUnlockedTaskDay(currentUser);
 
   const sel = $("daySelect");
-  if (sel.options.length !== activePlan.days) {
+  if (sel.options.length !== taskDays) {
     sel.innerHTML = "";
-    for (let d = 1; d <= activePlan.days; d++) {
+    for (let d = 1; d <= taskDays; d++) {
       const o = document.createElement("option");
       o.value = d; o.textContent = "Day " + d;
       sel.appendChild(o);
@@ -436,8 +449,8 @@ function renderTasks() {
   sel.value = String(day);
 
   const unlockNotice = $("taskUnlockNotice");
-  if (unlockedDay < activePlan.days) {
-    const nextUnlockAt = getPlanStartTime(currentUser, activePlan) + unlockedDay * DAY_MS;
+  if (unlockedDay < taskDays) {
+    const nextUnlockAt = getTaskStartTime(currentUser) + unlockedDay * DAY_MS;
     unlockNotice.textContent = "Day " + (unlockedDay + 1) + " unlocks at " + new Date(nextUnlockAt).toLocaleString() + ".";
     clearTimeout(taskUnlockTimer);
     const userId = currentUser.id;
@@ -463,12 +476,13 @@ function renderTasks() {
 
     const div = document.createElement("div");
     div.className = "task-card";
+    const dailyReward = getActiveDailyReward(activePlans);
     div.innerHTML =
       "<div class='task-card-content'>" +
         "<p class='task-platform'>" + esc(task.platform) + "</p>" +
         "<h3>" + esc(task.action) + " <span>— " + esc(task.channel) + "</span></h3>" +
-        "<p class='task-details'>Day " + task.day + " • " + (activePlan.dailyReward
-          ? "Part of <span class='reward'>" + rs(activePlan.dailyReward) + " daily simulation reward</span>; mark all 3 tasks done to earn"
+        "<p class='task-details'>Day " + task.day + " • " + (dailyReward
+          ? "Part of <span class='reward'>" + rs(dailyReward) + " combined daily simulation reward</span>; mark all 3 tasks done to earn"
           : "<span class='reward'>" + rs(reward) + "</span> when marked done") + "</p>" +
       "</div>" +
       "<div class='task-card-actions'>" +
@@ -484,8 +498,8 @@ function renderTasks() {
 
 async function submitTask(taskId) {
   if (!currentUser) { $("tasksMsg").textContent = "Please login first."; showView("login"); return; }
-  const activePlan = getActivePlan(currentUser);
-  if (!activePlan) {
+  const activePlans = getActivePlans(currentUser);
+  if (!activePlans.length) {
     $("tasksMsg").textContent = "An active plan is required to submit tasks.";
     showView("plans");
     return;
@@ -493,7 +507,7 @@ async function submitTask(taskId) {
   const task = ALL_TASKS.find(t => t.id === taskId);
   if (!task) return;
   if (task.day > getUnlockedTaskDay(currentUser)) {
-    $("tasksMsg").textContent = "Day " + task.day + " is locked. New task days unlock every 24 hours after your plan starts.";
+    $("tasksMsg").textContent = "Day " + task.day + " is locked. New task days unlock every 24 hours after your first plan starts.";
     return;
   }
   const subs = getSubmissions();
@@ -514,7 +528,7 @@ async function submitTask(taskId) {
   const sub = {
     id: "S" + Date.now(), userId: currentUser.id, userName: currentUser.name,
     taskId: task.id, day: task.day, platform: task.platform, channel: task.channel,
-    action: task.action, reward: activePlan.dailyReward ? 0 : (settings.rewards[task.action] ?? task.reward),
+    action: task.action, reward: getActiveDailyReward(activePlans) ? 0 : (settings.rewards[task.action] ?? task.reward),
     status: "pending", createdAt: new Date().toISOString()
   };
   subs.push(sub);
@@ -524,32 +538,67 @@ async function submitTask(taskId) {
   renderTasks();
 }
 
-function getActivePlan(user) {
-  if (!user?.activePlanId || !user.planExpiresAt || Date.parse(user.planExpiresAt) <= Date.now()) return null;
-  return findPlan(user.activePlanId);
+function getPlanActivations(user) {
+  if (Array.isArray(user?.planActivations) && user.planActivations.length) return user.planActivations;
+  if (!user?.activePlanId || !user.planExpiresAt) return [];
+  const plan = findPlan(user.activePlanId);
+  if (!plan) return [];
+  const startedAt = user.planStartedAt || new Date(Date.parse(user.planExpiresAt) - plan.days * DAY_MS).toISOString();
+  return [{ id: startedAt, planId: plan.id, startedAt, expiresAt: user.planExpiresAt }];
 }
 
-function getPlanStartTime(user, plan) {
+function getActivePlans(user) {
+  const now = Date.now();
+  return getPlanActivations(user).filter(activation =>
+    Date.parse(activation.startedAt) <= now && Date.parse(activation.expiresAt) > now
+  ).map(activation => {
+    const plan = findPlan(activation.planId);
+    return plan ? { ...plan, activation } : null;
+  }).filter(Boolean);
+}
+
+function getActiveDailyReward(activePlans) {
+  return activePlans.reduce((total, plan) => total + Number(plan.dailyReward || 0), 0);
+}
+
+function getTaskStartTime(user) {
+  const startTimes = getPlanActivations(user).map(activation => Date.parse(activation.startedAt)).filter(Number.isFinite);
+  if (startTimes.length) return Math.min(...startTimes);
   const startedAt = Date.parse(user?.planStartedAt || "");
   if (Number.isFinite(startedAt)) return startedAt;
+  const plan = findPlan(user?.activePlanId);
   const expiresAt = Date.parse(user?.planExpiresAt || "");
-  return Number.isFinite(expiresAt) ? expiresAt - plan.days * DAY_MS : Date.now();
+  return plan && Number.isFinite(expiresAt) ? expiresAt - plan.days * DAY_MS : Date.now();
 }
 
-function getUnlockedTaskDay(user, plan = getActivePlan(user)) {
-  if (!plan) return 0;
-  const elapsed = Math.max(0, Date.now() - getPlanStartTime(user, plan));
-  return Math.min(plan.days, Math.floor(elapsed / DAY_MS) + 1);
+function getTaskScheduleDays(user) {
+  const durations = getPlanActivations(user).map(activation => findPlan(activation.planId)?.days || 0);
+  const fallback = findPlan(user?.activePlanId)?.days || 0;
+  return Math.max(...durations, fallback) || CONFIG.DAYS;
+}
+
+function getUnlockedTaskDay(user) {
+  if (!getActivePlans(user).length) return 0;
+  const elapsed = Math.max(0, Date.now() - getTaskStartTime(user));
+  return Math.min(getTaskScheduleDays(user), Math.floor(elapsed / DAY_MS) + 1);
 }
 
 function activateRequestedPlan(user) {
   const plan = findPlan(user?.planRequestId);
-  if (!user || !plan || getActivePlan(user) || Number(user.balance) < plan.amount) return false;
+  if (!user || !plan || Number(user.balance) < plan.amount) return false;
 
   const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
   user.balance -= plan.amount;
+  if (!Array.isArray(user.planActivations)) user.planActivations = getPlanActivations(user);
+  user.planActivations.push({
+    id: "A" + startedAt + "-" + Math.random().toString(36).slice(2, 8),
+    planId: plan.id,
+    startedAt: startedAtIso,
+    expiresAt: new Date(startedAt + plan.days * DAY_MS).toISOString()
+  });
   user.activePlanId = plan.id;
-  user.planStartedAt = new Date(startedAt).toISOString();
+  user.planStartedAt = startedAtIso;
   user.planExpiresAt = new Date(startedAt + plan.days * DAY_MS).toISOString();
   user.planRequestId = null;
 
@@ -572,18 +621,25 @@ function renderPlans() {
     currentUser = planUser;
     sessionStorage.setItem("ame_session", JSON.stringify(planUser));
   }
-  const activePlan = getActivePlan(currentUser);
+  const activePlans = getActivePlans(currentUser);
   const requestedPlan = findPlan(currentUser?.planRequestId);
-  $("plansStatus").textContent = activePlan
-    ? "Active: " + rs(activePlan.amount) + " plan, until " + new Date(currentUser.planExpiresAt).toLocaleDateString()
+  const totalDailyReward = getActiveDailyReward(activePlans);
+  const activeText = activePlans.length
+    ? "Active plans: " + activePlans.map(plan =>
+      rs(plan.amount) + " (" + Math.ceil((Date.parse(plan.activation.expiresAt) - Date.now()) / DAY_MS) +
+        " days left; until " + new Date(plan.activation.expiresAt).toLocaleDateString() + ")"
+    ).join("; ") + (totalDailyReward ? ". Combined daily simulation reward: " + rs(totalDailyReward) : "")
+    : "";
+  $("plansStatus").textContent = activeText
+    ? activeText + (requestedPlan ? " • Selected: " + rs(requestedPlan.amount) + " awaiting sufficient balance." : "")
     : requestedPlan
       ? "Selected: " + rs(requestedPlan.amount) + ". It activates automatically when your balance reaches " + rs(requestedPlan.amount) + "."
-      : "Choose an 80-day plan. It activates automatically when your balance covers its price.";
+      : "Choose one or more plans. Each activates when your balance covers its price and has its own 80-day period.";
   $("plansList").innerHTML = PLANS.map(plan =>
     {
       const selected = currentUser?.planRequestId === plan.id;
-      const disabled = !currentUser || !!activePlan || !!requestedPlan;
-      const buttonText = activePlan ? "Plan active" : selected ? "Selected" : requestedPlan ? "Another plan selected" : "Choose plan";
+      const disabled = !currentUser || (!!requestedPlan && !selected);
+      const buttonText = selected ? "Selected" : requestedPlan ? "Another plan selected" : "Choose plan";
       const totalSimulatedReward = Number(plan.totalReward ?? (Number(plan.dailyReward) * Number(plan.days)));
       return "<article class='plan-card'><h3>" + rs(plan.amount) + " activity</h3>" +
         "<p class='plan-duration'>" + plan.days + " days</p>" +
@@ -601,14 +657,14 @@ function renderPlans() {
 
 function requestPlan(planId) {
   if (!currentUser) { showView("login"); return; }
-  if (!PLANS.some(plan => plan.id === planId) || getActivePlan(currentUser) || currentUser.planRequestId) return;
+  if (!PLANS.some(plan => plan.id === planId) || currentUser.planRequestId) return;
   if (useSupabase) {
     supabaseClient.rpc("select_plan", { p_plan_id: planId }).then(async ({ error }) => {
       if (error) { $("plansMsg").textContent = error.message; return; }
       try {
         await refreshSupabaseData();
         const selected = findPlan(currentUser.planRequestId);
-        $("plansMsg").textContent = currentUser.activePlanId
+        $("plansMsg").textContent = !currentUser.planRequestId
           ? "Plan activated automatically; the fictional plan price was deducted."
           : "Plan selected. It will activate when your balance reaches " + rs(selected?.amount) + ".";
         renderPlans();
@@ -921,9 +977,9 @@ function renderAdmin() {
   $("adminTasks").innerHTML = pendingTasks.length
     ? pendingTasks.map(s => {
       const taskUser = users.find(user => user.id === s.userId);
-      const taskPlan = findPlan(taskUser?.activePlanId);
-      const rewardLabel = taskPlan?.dailyReward
-        ? "part of " + rs(taskPlan.dailyReward) + " daily simulation reward"
+      const combinedReward = getActiveDailyReward(getActivePlans(taskUser));
+      const rewardLabel = combinedReward
+        ? "part of " + rs(combinedReward) + " combined daily simulation reward"
         : rs(s.reward);
       return "<li><span>" + esc(s.userName) + " • Day " + s.day + " • " + s.action + " " + esc(s.channel) + " • " + rewardLabel + "</span><span><button class='btn btn-primary btn-small' onclick=\"approveTask('" + s.id + "')\">Approve</button> <button class='btn btn-outline btn-small' onclick=\"rejectTask('" + s.id + "')\">Reject</button></span></li>";
     }).join("")
@@ -940,13 +996,14 @@ function renderAdmin() {
     : "<li>No pending withdrawals.</li>";
 
   $("adminUsers").innerHTML = users.map(u => {
-    const activePlan = getActivePlan(u);
+    const activePlans = getActivePlans(u);
     const requestedPlan = findPlan(u.planRequestId);
-    const planStatus = requestedPlan
-      ? "<span class='badge'>WAITING FOR " + rs(requestedPlan.amount) + " BALANCE</span>"
-      : activePlan
-        ? "<span class='badge approved'>" + rs(activePlan.amount) + " ACTIVE</span>"
-        : "<span class='badge'>NO ACTIVE PLAN</span>";
+    const activeStatus = activePlans.length
+      ? "<span class='badge approved'>" + activePlans.length + " PLAN(S) ACTIVE • " + rs(getActiveDailyReward(activePlans)) + "/DAY</span>"
+      : "<span class='badge'>NO ACTIVE PLAN</span>";
+    const planStatus = activeStatus + (requestedPlan
+      ? " <span class='badge'>WAITING FOR " + rs(requestedPlan.amount) + " BALANCE</span>"
+      : "");
     return "<li><span>" + esc(u.name) + " (" + esc(u.email) + ") • Balance " + rs(u.balance) + " • Referred " + getUsers().filter(x => x.referredBy === u.id).length + "</span>" +
       "<span>" + planStatus + " " + (u.isAdmin ? "<span class='badge approved'>ADMIN</span>" : "<button class='btn btn-outline btn-small' onclick=\"promoteUser('" + u.id + "')\">Make admin</button>") + "</span></li>";
   }).join("");
@@ -1034,23 +1091,32 @@ async function approveTask(subId) {
   const users = getUsers();
   const earner = users.find(u => u.id === sub.userId);
   if (earner) {
-    const plan = findPlan(earner.activePlanId);
+    const activePlans = getActivePlans(earner);
     let payout = sub.reward;
     let payoutText = "Task approved: " + sub.action + " " + sub.channel + " (Day " + sub.day + ")";
 
-    if (plan?.dailyReward) {
+    if (getActiveDailyReward(activePlans)) {
       const dayTaskIds = new Set(ALL_TASKS.filter(task => task.day === sub.day).map(task => task.id));
       const approvedCount = subs.filter(item => item.userId === earner.id && dayTaskIds.has(item.taskId) && item.status === "approved").length;
-      const payoutKey = [earner.id, earner.planStartedAt || earner.planExpiresAt, sub.day].join(":");
       const paidDays = store.get("dailyTaskPayouts", []);
-      if (approvedCount < dayTaskIds.size || paidDays.includes(payoutKey)) {
+      if (approvedCount < dayTaskIds.size) {
         renderAdmin(); updateStats();
         return;
       }
-      paidDays.push(payoutKey);
+      const eligiblePlans = activePlans.filter(plan => plan.dailyReward);
+      const unpaidPlans = eligiblePlans.filter(plan =>
+        !paidDays.includes([earner.id, plan.activation.id, sub.day].join(":"))
+      );
+      if (!unpaidPlans.length) {
+        renderAdmin(); updateStats();
+        return;
+      }
+      unpaidPlans.forEach(plan => {
+        paidDays.push([earner.id, plan.activation.id, sub.day].join(":"));
+      });
+      payout = unpaidPlans.reduce((total, plan) => total + Number(plan.dailyReward), 0);
       store.set("dailyTaskPayouts", paidDays);
-      payout = plan.dailyReward;
-      payoutText = "Daily task reward: Day " + sub.day + " completed";
+      payoutText = "Combined daily task reward: Day " + sub.day + " completed";
     }
 
     earner.balance += payout;

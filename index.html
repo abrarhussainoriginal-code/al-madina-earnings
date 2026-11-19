@@ -7,7 +7,7 @@
   <!--
     Al-Madina Earnings — plan access demo
     --------------------------------------
-    * Account creation is free; a selected plan activates when simulated balance covers its price.
+    * Account creation is free; each selected plan activates when simulated balance covers its price.
     * This demo does not collect or verify payments.
     * No guaranteed daily percent (no 20%, no 15%).
     * Simulated daily rewards are credited after all three daily tasks are marked done.
@@ -68,7 +68,7 @@
         <p>
           Choose an 80-day activity plan, then complete follow, like and comment tasks on
           the TikTok profile @zoya.sheikh772.
-          A selected plan activates automatically when your simulated balance covers its price. Daily simulation rewards are credited after all three tasks are marked done.
+          Plans activate automatically when your simulated balance covers their prices. Active plan rewards are combined after all three tasks are marked done.
         </p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-large" onclick="showView('signup')">Create account</button>
@@ -82,7 +82,7 @@
       <div class="cards">
         <div class="card">
           <h3>1. Create an account</h3>
-          <p>Account creation is free. Choose an 80-day activity plan to request task access.</p>
+          <p>Account creation is free. Choose one or more 80-day activity plans to request task access.</p>
         </div>
         <div class="card">
           <h3>2. Do 3 tasks a day</h3>
@@ -90,7 +90,7 @@
         </div>
         <div class="card">
           <h3>3. Mark done, then you earn</h3>
-          <p>Tasks are approved automatically when marked done. Your selected plan’s simulated daily reward is credited after all three tasks for that day are done.</p>
+          <p>Tasks are approved automatically when marked done. The combined simulated daily reward of your active plans is credited after all three tasks for that day are done.</p>
         </div>
         <div class="card">
           <h3>4. Invite friends</h3>
@@ -145,7 +145,7 @@
         <a class="btn btn-primary" href="https://www.tiktok.com/@zoya.sheikh772?_r=1&_t=ZS-9BSEi9RJtDR" target="_blank" rel="noopener">Open TikTok profile</a>
       </div>
       <div class="task-toolbar">
-        <p class="muted">Complete all three tasks for the day. The plan’s simulated daily reward is credited after all three are approved.</p>
+        <p class="muted">Complete all three tasks for the day. The combined simulated daily reward from active plans is credited after all three are approved.</p>
         <label class="task-day-picker">Day
           <select id="daySelect" onchange="renderTasks()" aria-label="Choose task day"></select>
         </label>
@@ -168,7 +168,7 @@
     <section id="view-plans" class="view" style="display:none;">
       <h2>80-day activity plans</h2>
       <p class="simulation-note"><strong>important note:</strong> add money to your account to activate plans.</p>
-      <p class="muted">Choose a plan below. It activates automatically when your balance covers its price, which is deducted at activation. Total simulated rewards are calculated as daily reward × plan days. Rewards are fictional, not real earnings.</p>
+      <p class="muted">Choose multiple plans if you wish. Each activates automatically when your balance covers its price, which is deducted at activation. Active plans have separate 80-day periods; their daily rewards are combined after all three tasks are done. Rewards are fictional, not real earnings.</p>
       <p id="plansStatus" class="plan-status"></p>
       <div id="plansList" class="plans-grid"></div>
       <p id="plansMsg" class="muted"></p>

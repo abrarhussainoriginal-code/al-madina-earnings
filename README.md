@@ -1,8 +1,10 @@
 # Al-Madina Earnings — Netlify-ready codebase (safe version)
 
 Account creation is free. Ten 80-day activity plans are available;
-a selected plan activates automatically when the fictional balance covers
-its price, which is deducted at activation. This demo does not
+each selected plan activates automatically when the fictional balance covers
+its price, which is deducted at activation. Multiple plans can be active at
+once, with separate expiry dates and combined daily simulated rewards while
+they overlap. This demo does not
 collect or verify payments. All plan rewards and balances are fictional
 classroom-simulation values; no real money is paid.
 
@@ -17,7 +19,7 @@ classroom-simulation values; no real money is paid.
 | `index.html` | The whole site: Home, Sign up, Login, Dashboard / Tasks, Wallet, Deposit, Referrals, Withdraw, Admin. | **Yes — start here.** It is the page you see. |
 | `styles.css` | The look: green / white theme, cards, buttons, mobile layout. | If you want to change colours or sizes. |
 | `app.js` | All the logic in plain JavaScript, with comments. | **Second.** This is where the rules live. |
-| `supabase.sql` | The database: tables + the 80-day task plan + settings. Run in Supabase. | When you set up Supabase. |
+| `supabase.sql` | The database: tables, plan activations, the 80-day task schedule, and settings. Run in Supabase. | When you set up Supabase. |
 | `netlify.toml` | Netlify settings: publish this folder, no build step. | You do not need to edit it. |
 | `README.md` | This guide. | You are reading it. |
 
@@ -37,10 +39,12 @@ The top menu switches views: Home, Tasks, Plans, Wallet, Referrals, Withdraw, Ad
   Rs 3,660 (Rs 610/day), Rs 7,260 (Rs 1,210/day), Rs 14,850 (Rs 2,475/day),
   Rs 32,820 (Rs 5,470/day), Rs 62,940 (Rs 10,490/day),
   Rs 136,560 (Rs 22,760/day), and Rs 280,830 (Rs 46,805/day).
-  Tasks are approved automatically when marked done. A daily simulation reward
-  is credited once after all three tasks for that day are done. Plans activate
-  automatically when the fictional balance covers their price; the price is
-  deducted. Each plan shows total simulated rewards, calculated in Supabase as
+  Tasks are approved automatically when marked done. Each active plan contributes
+  its daily simulation reward once after all three tasks for that day are done.
+  Active-plan rewards are combined, and an expired plan no longer contributes.
+  The task days use one shared 80-day schedule. Plans activate automatically
+  when the fictional balance covers their price; the price is deducted. Each
+  plan shows total simulated rewards, calculated in Supabase as
   `daily reward × plan days`. The demo does not handle payments.
 - **Tasks** stays locked without an active plan. Once activated, it
   shows Day 1–80, 3 tasks a day, each with Open channel + Mark done; marking
@@ -82,17 +86,19 @@ REFERRAL_PERCENT: 5,
 - `generateTasks()` makes 80 days × 3 tasks = 240 tasks, rotating
   Follow, Like, and Comment actions on that profile.
 - Re-run `supabase.sql` in Supabase to update the stored task catalog and enable automatic task approval.
-- Day 1 opens when a plan is activated; each following task day unlocks
-  24 hours later. Existing active plans use their expiry to infer the start.
-  New plan rewards are fictional classroom-simulation amounts and are credited
-  once per day only after all three tasks for that day are marked done. No real
-  money is paid by this project.
+- Day 1 opens when the first plan is activated; each following task day unlocks
+  24 hours later. Later activations have independent 80-day reward periods and
+  do not restart the shared task schedule. New plan rewards are fictional
+  classroom-simulation amounts and are credited once per active plan only after
+  all three tasks for that day are marked done. No real money is paid by this
+  project.
 
 **The key conditions — where the safety rules live:**
 
 1. **Automatic task approval and simulated rewards** — in `submitTask()` and `approveTask()`
    - `submitTask()` approves the task immediately when the user marks it done.
-   - New-plan rewards are credited once per day, after all three tasks are done.
+   - Each active plan contributes its daily reward once per day, after all
+     three tasks are done; active plan rewards are combined.
    - Existing pending tasks can still be approved or rejected by an admin.
 
 2. **One submission per task** — in `submitTask()`
@@ -122,10 +128,13 @@ REFERRAL_PERCENT: 5,
      in Settings.
 
 6. **Plans and task access** — in `requestPlan()`, `activateRequestedPlan()`,
-   `getActivePlan()`, and `submitTask()`
-  - A user selects a plan; it activates automatically when the fictional
-    balance covers its price, which is deducted from the balance.
-   - Task rendering and task submission both require an active plan.
+   `getActivePlans()`, and `submitTask()`
+  - Each selected plan activates automatically when the fictional balance
+    covers its price, which is deducted from the balance. Multiple activations
+    can overlap and each has its own expiration date.
+  - Task rendering and task submission require at least one active plan. The
+    shared task schedule runs 80 days from the first activation; each completed
+    day pays the combined rewards of plans active at completion.
   - This is a classroom simulation, not payment processing or verification.
     User records are local in demo mode.
 

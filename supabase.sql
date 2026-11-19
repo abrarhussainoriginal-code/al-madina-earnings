@@ -173,6 +173,32 @@ on conflict (id) do update set
   daily_reward_rs = excluded.daily_reward_rs,
   duration_days = excluded.duration_days;
 
+create table if not exists public.plan_activations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  plan_id text not null references public.plan_catalog(id),
+  started_at timestamptz not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, started_at)
+);
+create index if not exists plan_activations_user_expiry_idx
+  on public.plan_activations (user_id, expires_at);
+
+-- Preserve the currently active plan for accounts created before this table.
+insert into public.plan_activations (user_id, plan_id, started_at, expires_at)
+select profile.id, profile.active_plan_id, profile.plan_started_at,
+  coalesce(profile.plan_expires_at,
+    profile.plan_started_at + make_interval(days => catalog.duration_days))
+from public.profiles profile
+join public.plan_catalog catalog on catalog.id = profile.active_plan_id
+where profile.plan_started_at is not null
+  and not exists (
+    select 1 from public.plan_activations activation
+    where activation.user_id = profile.id and activation.started_at = profile.plan_started_at
+  )
+on conflict (user_id, started_at) do nothing;
+
 create table if not exists public.demo_balance_requests (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -202,6 +228,15 @@ create table if not exists public.daily_task_payouts (
   created_at timestamptz not null default now(),
   unique (user_id, plan_started_at, day_number)
 );
+alter table public.daily_task_payouts
+  add column if not exists plan_activation_id uuid references public.plan_activations(id) on delete cascade;
+update public.daily_task_payouts payout set plan_activation_id = activation.id
+from public.plan_activations activation
+where payout.plan_activation_id is null
+  and payout.user_id = activation.user_id
+  and payout.plan_started_at = activation.started_at;
+create unique index if not exists daily_task_payouts_user_activation_day_key
+  on public.daily_task_payouts (user_id, plan_activation_id, day_number);
 
 -- Create a profile for each Supabase Auth account and connect referral codes.
 create or replace function public.create_profile_for_auth_user()
@@ -296,7 +331,6 @@ declare
 begin
   select * into account from public.profiles where id = p_user_id for update;
   if not found or account.plan_request_id is null then return false; end if;
-  if account.active_plan_id is not null and account.plan_expires_at > now() then return false; end if;
 
   select * into selected_plan from public.plan_catalog where id = account.plan_request_id;
   if not found or account.balance_rs < selected_plan.price_rs then return false; end if;
@@ -309,6 +343,9 @@ begin
     plan_expires_at = started_at + make_interval(days => selected_plan.duration_days),
     plan_request_id = null
   where id = p_user_id;
+  insert into public.plan_activations (user_id, plan_id, started_at, expires_at)
+  values (p_user_id, selected_plan.id, started_at,
+    started_at + make_interval(days => selected_plan.duration_days));
 
   insert into public.balance_history (user_id, description, amount_rs)
   values (p_user_id, 'Plan activated: ' || selected_plan.id || ' (fictional balance)', -selected_plan.price_rs);
@@ -328,9 +365,6 @@ begin
   if auth.uid() is null then raise exception 'Sign in required'; end if;
   select * into account from public.profiles where id = auth.uid() for update;
   if not found then raise exception 'Profile not found'; end if;
-  if account.active_plan_id is not null and account.plan_expires_at > now() then
-    raise exception 'An active plan already exists';
-  end if;
   if not exists (select 1 from public.plan_catalog where id = p_plan_id) then
     raise exception 'Unknown plan';
   end if;
@@ -396,6 +430,9 @@ declare
   approved_count int;
   task_count int;
   payout numeric;
+  active_daily_plan_count int;
+  plan_activation record;
+  inserted_rows int;
   referrer_id uuid;
   referrer_reward numeric;
 begin
@@ -405,21 +442,55 @@ begin
 
   select * into account from public.profiles where id = submission.user_id for update;
   select day_number into task_day from public.tasks where id = submission.task_id;
-  select daily_reward_rs into plan_reward from public.plan_catalog where id = account.active_plan_id;
+  select count(*) into active_daily_plan_count
+  from public.plan_activations activation
+  join public.plan_catalog catalog on catalog.id = activation.plan_id
+  where activation.user_id = account.id
+    and activation.started_at <= now() and activation.expires_at > now()
+    and catalog.daily_reward_rs > 0;
 
-  if plan_reward is not null then
+  if active_daily_plan_count > 0 then
     select count(*) into task_count from public.tasks where day_number = task_day;
     select count(*) into approved_count from public.task_submissions sub
       join public.tasks task on task.id = sub.task_id
       where sub.user_id = account.id and task.day_number = task_day and sub.status = 'approved';
-    if approved_count < task_count or account.plan_started_at is null then return; end if;
-    insert into public.daily_task_payouts (user_id, plan_started_at, day_number, amount_rs)
-    values (account.id, account.plan_started_at, task_day, plan_reward)
-    on conflict (user_id, plan_started_at, day_number) do nothing;
-    if not found then return; end if;
-    payout := plan_reward;
+    if approved_count < task_count then return; end if;
+    payout := 0;
+    for plan_activation in
+      select activation.id, activation.started_at, catalog.daily_reward_rs
+      from public.plan_activations activation
+      join public.plan_catalog catalog on catalog.id = activation.plan_id
+      where activation.user_id = account.id
+        and activation.started_at <= now() and activation.expires_at > now()
+        and catalog.daily_reward_rs > 0
+    loop
+      insert into public.daily_task_payouts
+        (user_id, plan_started_at, plan_activation_id, day_number, amount_rs)
+      values
+        (account.id, plan_activation.started_at, plan_activation.id, task_day, plan_activation.daily_reward_rs)
+      on conflict (user_id, plan_activation_id, day_number) do nothing;
+      get diagnostics inserted_rows = row_count;
+      if inserted_rows > 0 then payout := payout + plan_activation.daily_reward_rs; end if;
+    end loop;
+    if payout <= 0 then return; end if;
   else
-    payout := submission.reward_rs;
+    select daily_reward_rs into plan_reward
+    from public.plan_catalog where id = account.active_plan_id;
+    if plan_reward is not null then
+      if account.plan_expires_at is null or account.plan_expires_at <= now() then return; end if;
+      select count(*) into task_count from public.tasks where day_number = task_day;
+      select count(*) into approved_count from public.task_submissions sub
+        join public.tasks task on task.id = sub.task_id
+        where sub.user_id = account.id and task.day_number = task_day and sub.status = 'approved';
+      if approved_count < task_count or account.plan_started_at is null then return; end if;
+      insert into public.daily_task_payouts (user_id, plan_started_at, day_number, amount_rs)
+      values (account.id, account.plan_started_at, task_day, plan_reward)
+      on conflict (user_id, plan_started_at, day_number) do nothing;
+      if not found then return; end if;
+      payout := plan_reward;
+    else
+      payout := submission.reward_rs;
+    end if;
   end if;
 
   update public.profiles set
@@ -460,20 +531,37 @@ declare
   account public.profiles%rowtype;
   task_row public.tasks%rowtype;
   plan_days int;
+  active_plan_count int;
+  task_started_at timestamptz;
   task_reward numeric;
   submission_id uuid;
 begin
   if auth.uid() is null then raise exception 'Sign in required'; end if;
   select * into account from public.profiles where id = auth.uid() for update;
-  if not found or account.active_plan_id is null or account.plan_expires_at is null or account.plan_expires_at <= now() then
-    raise exception 'An active plan is required';
-  end if;
+  if not found then raise exception 'An active plan is required'; end if;
   select * into task_row from public.tasks where id = p_task_id;
   if not found then raise exception 'Task not found'; end if;
-  select duration_days into plan_days from public.plan_catalog where id = account.active_plan_id;
-  if plan_days is null then plan_days := 30; end if;
+
+  select count(*) into active_plan_count from public.plan_activations
+  where user_id = account.id and started_at <= now() and expires_at > now();
+  if active_plan_count = 0 and
+    (account.active_plan_id is null or account.plan_expires_at is null or account.plan_expires_at <= now()) then
+    raise exception 'An active plan is required';
+  end if;
+
+  select min(activation.started_at), max(catalog.duration_days)
+  into task_started_at, plan_days
+  from public.plan_activations activation
+  join public.plan_catalog catalog on catalog.id = activation.plan_id
+  where activation.user_id = account.id;
+  if task_started_at is null then
+    select duration_days into plan_days from public.plan_catalog where id = account.active_plan_id;
+    if plan_days is null then plan_days := 30; end if;
+    task_started_at := coalesce(account.plan_started_at,
+      account.plan_expires_at - make_interval(days => plan_days));
+  end if;
   if task_row.day_number > plan_days or task_row.day_number > floor(extract(epoch from (
-    now() - coalesce(account.plan_started_at, account.plan_expires_at - make_interval(days => plan_days))
+    now() - task_started_at
   )) / 86400) + 1 then
     raise exception 'Task day is locked';
   end if;
@@ -617,6 +705,7 @@ alter table public.withdrawals enable row level security;
 alter table public.referrals enable row level security;
 alter table public.settings enable row level security;
 alter table public.plan_catalog enable row level security;
+alter table public.plan_activations enable row level security;
 alter table public.demo_balance_requests enable row level security;
 alter table public.balance_history enable row level security;
 alter table public.daily_task_payouts enable row level security;
@@ -624,10 +713,10 @@ alter table public.daily_task_payouts enable row level security;
 grant usage on schema public to authenticated;
 revoke all on public.profiles, public.tasks, public.task_submissions, public.withdrawals,
   public.referrals, public.settings, public.plan_catalog, public.demo_balance_requests,
-  public.balance_history, public.daily_task_payouts from anon, authenticated;
+  public.plan_activations, public.balance_history, public.daily_task_payouts from anon, authenticated;
 grant select on public.profiles, public.tasks, public.task_submissions, public.withdrawals,
   public.referrals, public.settings, public.plan_catalog, public.demo_balance_requests,
-  public.balance_history, public.daily_task_payouts to authenticated;
+  public.plan_activations, public.balance_history, public.daily_task_payouts to authenticated;
 
 drop policy if exists profiles_read_own_or_admin on public.profiles;
 create policy profiles_read_own_or_admin on public.profiles
@@ -656,6 +745,10 @@ create policy settings_read_authenticated on public.settings
 drop policy if exists plan_catalog_read_authenticated on public.plan_catalog;
 create policy plan_catalog_read_authenticated on public.plan_catalog
   for select to authenticated using (auth.uid() is not null);
+
+drop policy if exists plan_activations_read_own_or_admin on public.plan_activations;
+create policy plan_activations_read_own_or_admin on public.plan_activations
+  for select to authenticated using (user_id = auth.uid() or public.is_admin());
 
 drop policy if exists demo_balance_requests_read_own_or_admin on public.demo_balance_requests;
 create policy demo_balance_requests_read_own_or_admin on public.demo_balance_requests
